@@ -85,7 +85,7 @@ public final class CassandraVectorStoreConfig implements AutoCloseable {
 	private static final Logger logger = LoggerFactory.getLogger(CassandraVectorStoreConfig.class);
 
 	record Schema(String keyspace, String table, List<SchemaColumn> partitionKeys, List<SchemaColumn> clusteringKeys,
-				  String content, String embedding, String index, Set<SchemaColumn> metadataColumns) {
+			String content, String embedding, String index, Set<SchemaColumn> metadataColumns) {
 
 	}
 
@@ -414,16 +414,16 @@ public final class CassandraVectorStoreConfig implements AutoCloseable {
 				"keyspace %s does not exist", this.schema.keyspace);
 
 		Preconditions.checkState(this.session.getMetadata()
-				.getKeyspace(this.schema.keyspace)
-				.get()
-				.getTable(this.schema.table)
-				.isPresent(), "table %s does not exist");
+			.getKeyspace(this.schema.keyspace)
+			.get()
+			.getTable(this.schema.table)
+			.isPresent(), "table %s does not exist");
 
 		TableMetadata tableMetadata = this.session.getMetadata()
-				.getKeyspace(this.schema.keyspace)
-				.get()
-				.getTable(this.schema.table)
-				.get();
+			.getKeyspace(this.schema.keyspace)
+			.get()
+			.getTable(this.schema.table)
+			.get();
 
 		Preconditions.checkState(tableMetadata.getColumn(this.schema.content).isPresent(), "column %s does not exist",
 				this.schema.content);
@@ -450,31 +450,31 @@ public final class CassandraVectorStoreConfig implements AutoCloseable {
 	private void ensureIndexesExists() {
 		{
 			SimpleStatement indexStmt = SchemaBuilder.createIndex(this.schema.index)
-					.ifNotExists()
-					.custom("StorageAttachedIndex")
-					.onTable(this.schema.keyspace, this.schema.table)
-					.andColumn(this.schema.embedding)
-					.build();
+				.ifNotExists()
+				.custom("StorageAttachedIndex")
+				.onTable(this.schema.keyspace, this.schema.table)
+				.andColumn(this.schema.embedding)
+				.build();
 
 			logger.debug("Executing {}", indexStmt.getQuery());
 			this.session.execute(indexStmt);
 		}
 		Stream
-				.concat(this.schema.partitionKeys.stream(),
-						Stream.concat(this.schema.clusteringKeys.stream(), this.schema.metadataColumns.stream()))
-				.filter((cs) -> cs.indexed())
-				.forEach((metadata) -> {
+			.concat(this.schema.partitionKeys.stream(),
+					Stream.concat(this.schema.clusteringKeys.stream(), this.schema.metadataColumns.stream()))
+			.filter((cs) -> cs.indexed())
+			.forEach((metadata) -> {
 
-					SimpleStatement indexStmt = SchemaBuilder.createIndex(String.format("%s_idx", metadata.name()))
-							.ifNotExists()
-							.custom("StorageAttachedIndex")
-							.onTable(this.schema.keyspace, this.schema.table)
-							.andColumn(metadata.name())
-							.build();
+				SimpleStatement indexStmt = SchemaBuilder.createIndex(String.format("%s_idx", metadata.name()))
+					.ifNotExists()
+					.custom("StorageAttachedIndex")
+					.onTable(this.schema.keyspace, this.schema.table)
+					.andColumn(metadata.name())
+					.build();
 
-					logger.debug("Executing {}", indexStmt.getQuery());
-					this.session.execute(indexStmt);
-				});
+				logger.debug("Executing {}", indexStmt.getQuery());
+				this.session.execute(indexStmt);
+			});
 	}
 
 	private void ensureTableExists(int vectorDimension) {
@@ -483,7 +483,7 @@ public final class CassandraVectorStoreConfig implements AutoCloseable {
 			CreateTable createTable = null;
 
 			CreateTableStart createTableStart = SchemaBuilder.createTable(this.schema.keyspace, this.schema.table)
-					.ifNotExists();
+				.ifNotExists();
 
 			for (SchemaColumn partitionKey : this.schema.partitionKeys) {
 				createTable = (null != createTable ? createTable : createTableStart).withPartitionKey(partitionKey.name,
@@ -506,10 +506,10 @@ public final class CassandraVectorStoreConfig implements AutoCloseable {
 			StringBuilder tableStmt = new StringBuilder(createTable.asCql());
 			tableStmt.setLength(tableStmt.length() - 1);
 			tableStmt.append(',')
-					.append(this.schema.embedding)
-					.append(" vector<float,")
-					.append(vectorDimension)
-					.append(">)");
+				.append(this.schema.embedding)
+				.append(" vector<float,")
+				.append(vectorDimension)
+				.append(">)");
 			logger.debug("Executing {}", tableStmt.toString());
 			this.session.execute(tableStmt.toString());
 		}
@@ -518,10 +518,10 @@ public final class CassandraVectorStoreConfig implements AutoCloseable {
 	private void ensureTableColumnsExist(int vectorDimension) {
 
 		TableMetadata tableMetadata = this.session.getMetadata()
-				.getKeyspace(this.schema.keyspace)
-				.get()
-				.getTable(this.schema.table)
-				.get();
+			.getKeyspace(this.schema.keyspace)
+			.get()
+			.getTable(this.schema.table)
+			.get();
 
 		Set<SchemaColumn> newColumns = new HashSet<>();
 		boolean addContent = tableMetadata.getColumn(this.schema.content).isEmpty();
@@ -559,9 +559,9 @@ public final class CassandraVectorStoreConfig implements AutoCloseable {
 					alterTableStmt.append(',');
 				}
 				alterTableStmt.append(this.schema.embedding)
-						.append(" vector<float,")
-						.append(vectorDimension)
-						.append(">)");
+					.append(" vector<float,")
+					.append(vectorDimension)
+					.append(">)");
 
 				logger.debug("Executing {}", alterTableStmt.toString());
 				this.session.execute(alterTableStmt.toString());
@@ -577,9 +577,9 @@ public final class CassandraVectorStoreConfig implements AutoCloseable {
 	private void ensureKeyspaceExists() {
 		if (this.session.getMetadata().getKeyspace(this.schema.keyspace).isEmpty()) {
 			SimpleStatement keyspaceStmt = SchemaBuilder.createKeyspace(this.schema.keyspace)
-					.ifNotExists()
-					.withSimpleStrategy(1)
-					.build();
+				.ifNotExists()
+				.withSimpleStrategy(1)
+				.build();
 
 			logger.debug("Executing {}", keyspaceStmt.getQuery());
 			this.session.execute(keyspaceStmt);
