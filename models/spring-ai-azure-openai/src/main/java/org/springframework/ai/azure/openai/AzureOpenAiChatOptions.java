@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.azure.openai;
 
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.azure.ai.openai.models.AzureChatEnhancementConfiguration;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -29,7 +31,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallingOptions;
-import org.springframework.boot.context.properties.NestedConfigurationProperty;
 import org.springframework.util.Assert;
 
 /**
@@ -38,6 +39,8 @@ import org.springframework.util.Assert;
  * prompt data.
  *
  * @author Christian Tzolov
+ * @author Thomas Vitale
+ * @author Soby Chacko
  */
 @JsonInclude(Include.NON_NULL)
 public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptions {
@@ -45,7 +48,7 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 	/**
 	 * The maximum number of tokens to generate.
 	 */
-	@JsonProperty(value = "max_tokens")
+	@JsonProperty("max_tokens")
 	private Integer maxTokens;
 
 	/**
@@ -55,8 +58,8 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 	 * temperature and top_p for the same completions request as the interaction of these
 	 * two settings is difficult to predict.
 	 */
-	@JsonProperty(value = "temperature")
-	private Float temperature;
+	@JsonProperty("temperature")
+	private Double temperature;
 
 	/**
 	 * An alternative to sampling with temperature called nucleus sampling. This value
@@ -66,8 +69,8 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 	 * temperature and top_p for the same completions request as the interaction of these
 	 * two settings is difficult to predict.
 	 */
-	@JsonProperty(value = "top_p")
-	private Float topP;
+	@JsonProperty("top_p")
+	private Double topP;
 
 	/**
 	 * A map between GPT token IDs and bias scores that influences the probability of
@@ -76,14 +79,14 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 	 * minimum and maximum values corresponding to a full ban or exclusive selection of a
 	 * token, respectively. The exact behavior of a given bias score varies by model.
 	 */
-	@JsonProperty(value = "logit_bias")
+	@JsonProperty("logit_bias")
 	private Map<String, Integer> logitBias;
 
 	/**
 	 * An identifier for the caller or end user of the operation. This may be used for
 	 * tracking or rate-limiting purposes.
 	 */
-	@JsonProperty(value = "user")
+	@JsonProperty("user")
 	private String user;
 
 	/**
@@ -92,13 +95,13 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 	 * quickly consume your token quota. Use carefully and ensure reasonable settings for
 	 * max_tokens and stop.
 	 */
-	@JsonProperty(value = "n")
+	@JsonProperty("n")
 	private Integer n;
 
 	/**
 	 * A collection of textual sequences that will end completions generation.
 	 */
-	@JsonProperty(value = "stop")
+	@JsonProperty("stop")
 	private List<String> stop;
 
 	/**
@@ -107,7 +110,7 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 	 * likely to appear when they already exist and increase the model's likelihood to
 	 * output new topics.
 	 */
-	@JsonProperty(value = "presence_penalty")
+	@JsonProperty("presence_penalty")
 	private Double presencePenalty;
 
 	/**
@@ -116,24 +119,31 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 	 * likely to appear as their frequency increases and decrease the likelihood of the
 	 * model repeating the same statements verbatim.
 	 */
-	@JsonProperty(value = "frequency_penalty")
+	@JsonProperty("frequency_penalty")
 	private Double frequencyPenalty;
 
 	/**
 	 * The deployment name as defined in Azure Open AI Studio when creating a deployment
 	 * backed by an Azure OpenAI base model.
 	 */
-	@JsonProperty(value = "deployment_name")
+	@JsonProperty("deployment_name")
 	private String deploymentName;
 
 	/**
-	 * OpenAI Tool Function Callbacks to register with the ChatClient. For Prompt Options
+	 * The response format expected from the Azure OpenAI model
+	 * @see org.springframework.ai.azure.openai.AzureOpenAiResponseFormat for supported
+	 * formats
+	 */
+	@JsonProperty("response_format")
+	private AzureOpenAiResponseFormat responseFormat;
+
+	/**
+	 * OpenAI Tool Function Callbacks to register with the ChatModel. For Prompt Options
 	 * the functionCallbacks are automatically enabled for the duration of the prompt
 	 * execution. For Default Options the functionCallbacks are registered but disabled by
 	 * default. Use the enableFunctions to set the functions from the registry to be used
-	 * by the ChatClient chat completion requests.
+	 * by the ChatModel chat completion requests.
 	 */
-	@NestedConfigurationProperty
 	@JsonIgnore
 	private List<FunctionCallback> functionCallbacks = new ArrayList<>();
 
@@ -148,103 +158,72 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 	 * functions is set in a prompt options, then the enabled functions are only active
 	 * for the duration of this prompt execution.
 	 */
-	@NestedConfigurationProperty
 	@JsonIgnore
 	private Set<String> functions = new HashSet<>();
+
+	@JsonIgnore
+	private Boolean proxyToolCalls;
+
+	/**
+	 * Seed value for deterministic sampling such that the same seed and parameters return
+	 * the same result.
+	 */
+	@JsonProperty("seed")
+	private Long seed;
+
+	/**
+	 * Whether to return log probabilities of the output tokens or not. If true, returns
+	 * the log probabilities of each output token returned in the `content` of `message`.
+	 * This option is currently not available on the `gpt-4-vision-preview` model.
+	 */
+	@JsonProperty("log_probs")
+	private Boolean logprobs;
+
+	/*
+	 * An integer between 0 and 5 specifying the number of most likely tokens to return at
+	 * each token position, each with an associated log probability. `logprobs` must be
+	 * set to `true` if this parameter is used.
+	 */
+	@JsonProperty("top_log_probs")
+	private Integer topLogProbs;
+
+	/*
+	 * If provided, the configuration options for available Azure OpenAI chat
+	 * enhancements.
+	 */
+	@JsonIgnore
+	private AzureChatEnhancementConfiguration enhancements;
+
+	@JsonIgnore
+	private Map<String, Object> toolContext;
 
 	public static Builder builder() {
 		return new Builder();
 	}
 
-	public static class Builder {
-
-		protected AzureOpenAiChatOptions options;
-
-		public Builder() {
-			this.options = new AzureOpenAiChatOptions();
-		}
-
-		public Builder(AzureOpenAiChatOptions options) {
-			this.options = options;
-		}
-
-		public Builder withDeploymentName(String deploymentName) {
-			this.options.deploymentName = deploymentName;
-			return this;
-		}
-
-		public Builder withFrequencyPenalty(Float frequencyPenalty) {
-			if (frequencyPenalty != null) {
-				this.options.frequencyPenalty = frequencyPenalty.doubleValue();
-			}
-			return this;
-		}
-
-		public Builder withLogitBias(Map<String, Integer> logitBias) {
-			this.options.logitBias = logitBias;
-			return this;
-		}
-
-		public Builder withMaxTokens(Integer maxTokens) {
-			this.options.maxTokens = maxTokens;
-			return this;
-		}
-
-		public Builder withN(Integer n) {
-			this.options.n = n;
-			return this;
-		}
-
-		public Builder withPresencePenalty(Float presencePenalty) {
-			if (presencePenalty != null) {
-				this.options.presencePenalty = presencePenalty.doubleValue();
-			}
-			return this;
-		}
-
-		public Builder withStop(List<String> stop) {
-			this.options.stop = stop;
-			return this;
-		}
-
-		public Builder withTemperature(Float temperature) {
-			this.options.temperature = temperature;
-			return this;
-		}
-
-		public Builder withTopP(Float topP) {
-			this.options.topP = topP;
-			return this;
-		}
-
-		public Builder withUser(String user) {
-			this.options.user = user;
-			return this;
-		}
-
-		public Builder withFunctionCallbacks(List<FunctionCallback> functionCallbacks) {
-			this.options.functionCallbacks = functionCallbacks;
-			return this;
-		}
-
-		public Builder withFunctions(Set<String> functionNames) {
-			Assert.notNull(functionNames, "Function names must not be null");
-			this.options.functions = functionNames;
-			return this;
-		}
-
-		public Builder withFunction(String functionName) {
-			Assert.hasText(functionName, "Function name must not be empty");
-			this.options.functions.add(functionName);
-			return this;
-		}
-
-		public AzureOpenAiChatOptions build() {
-			return this.options;
-		}
-
+	public static AzureOpenAiChatOptions fromOptions(AzureOpenAiChatOptions fromOptions) {
+		return builder().withDeploymentName(fromOptions.getDeploymentName())
+			.withFrequencyPenalty(fromOptions.getFrequencyPenalty() != null ? fromOptions.getFrequencyPenalty() : null)
+			.withLogitBias(fromOptions.getLogitBias())
+			.withMaxTokens(fromOptions.getMaxTokens())
+			.withN(fromOptions.getN())
+			.withPresencePenalty(fromOptions.getPresencePenalty() != null ? fromOptions.getPresencePenalty() : null)
+			.withStop(fromOptions.getStop())
+			.withTemperature(fromOptions.getTemperature())
+			.withTopP(fromOptions.getTopP())
+			.withUser(fromOptions.getUser())
+			.withFunctionCallbacks(fromOptions.getFunctionCallbacks())
+			.withFunctions(fromOptions.getFunctions())
+			.withResponseFormat(fromOptions.getResponseFormat())
+			.withSeed(fromOptions.getSeed())
+			.withLogprobs(fromOptions.isLogprobs())
+			.withTopLogprobs(fromOptions.getTopLogProbs())
+			.withEnhancements(fromOptions.getEnhancements())
+			.withToolContext(fromOptions.getToolContext())
+			.build();
 	}
 
+	@Override
 	public Integer getMaxTokens() {
 		return this.maxTokens;
 	}
@@ -277,6 +256,17 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 		this.n = n;
 	}
 
+	@Override
+	@JsonIgnore
+	public List<String> getStopSequences() {
+		return getStop();
+	}
+
+	@JsonIgnore
+	public void setStopSequences(List<String> stopSequences) {
+		setStop(stopSequences);
+	}
+
 	public List<String> getStop() {
 		return this.stop;
 	}
@@ -285,6 +275,7 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 		this.stop = stop;
 	}
 
+	@Override
 	public Double getPresencePenalty() {
 		return this.presencePenalty;
 	}
@@ -293,12 +284,24 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 		this.presencePenalty = presencePenalty;
 	}
 
+	@Override
 	public Double getFrequencyPenalty() {
 		return this.frequencyPenalty;
 	}
 
 	public void setFrequencyPenalty(Double frequencyPenalty) {
 		this.frequencyPenalty = frequencyPenalty;
+	}
+
+	@Override
+	@JsonIgnore
+	public String getModel() {
+		return getDeploymentName();
+	}
+
+	@JsonIgnore
+	public void setModel(String model) {
+		setDeploymentName(model);
 	}
 
 	public String getDeploymentName() {
@@ -310,32 +313,21 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 	}
 
 	@Override
-	public Float getTemperature() {
+	public Double getTemperature() {
 		return this.temperature;
 	}
 
-	public void setTemperature(Float temperature) {
+	public void setTemperature(Double temperature) {
 		this.temperature = temperature;
 	}
 
 	@Override
-	public Float getTopP() {
+	public Double getTopP() {
 		return this.topP;
 	}
 
-	public void setTopP(Float topP) {
+	public void setTopP(Double topP) {
 		this.topP = topP;
-	}
-
-	@Override
-	@JsonIgnore
-	public Integer getTopK() {
-		throw new UnsupportedOperationException("Unimplemented method 'getTopK'");
-	}
-
-	@JsonIgnore
-	public void setTopK(Integer topK) {
-		throw new UnsupportedOperationException("Unimplemented method 'setTopK'");
 	}
 
 	@Override
@@ -354,6 +346,201 @@ public class AzureOpenAiChatOptions implements FunctionCallingOptions, ChatOptio
 
 	public void setFunctions(Set<String> functions) {
 		this.functions = functions;
+	}
+
+	public AzureOpenAiResponseFormat getResponseFormat() {
+		return this.responseFormat;
+	}
+
+	public void setResponseFormat(AzureOpenAiResponseFormat responseFormat) {
+		this.responseFormat = responseFormat;
+	}
+
+	@Override
+	@JsonIgnore
+	public Integer getTopK() {
+		return null;
+	}
+
+	public Long getSeed() {
+		return this.seed;
+	}
+
+	public void setSeed(Long seed) {
+		this.seed = seed;
+	}
+
+	public Boolean isLogprobs() {
+		return this.logprobs;
+	}
+
+	public void setLogprobs(Boolean logprobs) {
+		this.logprobs = logprobs;
+	}
+
+	public Integer getTopLogProbs() {
+		return this.topLogProbs;
+	}
+
+	public void setTopLogProbs(Integer topLogProbs) {
+		this.topLogProbs = topLogProbs;
+	}
+
+	public AzureChatEnhancementConfiguration getEnhancements() {
+		return this.enhancements;
+	}
+
+	public void setEnhancements(AzureChatEnhancementConfiguration enhancements) {
+		this.enhancements = enhancements;
+	}
+
+	@Override
+	public Boolean getProxyToolCalls() {
+		return this.proxyToolCalls;
+	}
+
+	public void setProxyToolCalls(Boolean proxyToolCalls) {
+		this.proxyToolCalls = proxyToolCalls;
+	}
+
+	@Override
+	public Map<String, Object> getToolContext() {
+		return this.toolContext;
+	}
+
+	@Override
+	public void setToolContext(Map<String, Object> toolContext) {
+		this.toolContext = toolContext;
+	}
+
+	@Override
+	public AzureOpenAiChatOptions copy() {
+		return fromOptions(this);
+	}
+
+	public static class Builder {
+
+		protected AzureOpenAiChatOptions options;
+
+		public Builder() {
+			this.options = new AzureOpenAiChatOptions();
+		}
+
+		public Builder(AzureOpenAiChatOptions options) {
+			this.options = options;
+		}
+
+		public Builder withDeploymentName(String deploymentName) {
+			this.options.deploymentName = deploymentName;
+			return this;
+		}
+
+		public Builder withFrequencyPenalty(Double frequencyPenalty) {
+			this.options.frequencyPenalty = frequencyPenalty;
+			return this;
+		}
+
+		public Builder withLogitBias(Map<String, Integer> logitBias) {
+			this.options.logitBias = logitBias;
+			return this;
+		}
+
+		public Builder withMaxTokens(Integer maxTokens) {
+			this.options.maxTokens = maxTokens;
+			return this;
+		}
+
+		public Builder withN(Integer n) {
+			this.options.n = n;
+			return this;
+		}
+
+		public Builder withPresencePenalty(Double presencePenalty) {
+			this.options.presencePenalty = presencePenalty;
+			return this;
+		}
+
+		public Builder withStop(List<String> stop) {
+			this.options.stop = stop;
+			return this;
+		}
+
+		public Builder withTemperature(Double temperature) {
+			this.options.temperature = temperature;
+			return this;
+		}
+
+		public Builder withTopP(Double topP) {
+			this.options.topP = topP;
+			return this;
+		}
+
+		public Builder withUser(String user) {
+			this.options.user = user;
+			return this;
+		}
+
+		public Builder withFunctionCallbacks(List<FunctionCallback> functionCallbacks) {
+			this.options.functionCallbacks = functionCallbacks;
+			return this;
+		}
+
+		public Builder withFunctions(Set<String> functionNames) {
+			Assert.notNull(functionNames, "Function names must not be null");
+			this.options.functions = functionNames;
+			return this;
+		}
+
+		public Builder withFunction(String functionName) {
+			Assert.hasText(functionName, "Function name must not be empty");
+			this.options.functions.add(functionName);
+			return this;
+		}
+
+		public Builder withResponseFormat(AzureOpenAiResponseFormat responseFormat) {
+			this.options.responseFormat = responseFormat;
+			return this;
+		}
+
+		public Builder withProxyToolCalls(Boolean proxyToolCalls) {
+			this.options.proxyToolCalls = proxyToolCalls;
+			return this;
+		}
+
+		public Builder withSeed(Long seed) {
+			this.options.seed = seed;
+			return this;
+		}
+
+		public Builder withLogprobs(Boolean logprobs) {
+			this.options.logprobs = logprobs;
+			return this;
+		}
+
+		public Builder withTopLogprobs(Integer topLogprobs) {
+			this.options.topLogProbs = topLogprobs;
+			return this;
+		}
+
+		public Builder withEnhancements(AzureChatEnhancementConfiguration enhancements) {
+			this.options.enhancements = enhancements;
+			return this;
+		}
+
+		public Builder withToolContext(Map<String, Object> toolContext) {
+			if (this.options.toolContext == null) {
+				this.options.toolContext = toolContext;
+			}
+			else {
+				this.options.toolContext.putAll(toolContext);
+			}
+			return this;
+		}
+
+		public AzureOpenAiChatOptions build() {
+			return this.options;
+		}
+
 	}
 
 }

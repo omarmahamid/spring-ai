@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.anthropic;
 
 import java.util.List;
@@ -24,15 +25,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import reactor.core.publisher.Flux;
 
-import org.springframework.ai.anthropic.AnthropicChatClient;
-import org.springframework.ai.autoconfigure.retry.SpringAiRetryAutoConfiguration;
-import org.springframework.ai.chat.ChatResponse;
-import org.springframework.ai.chat.Generation;
+import org.springframework.ai.anthropic.AnthropicChatModel;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
+import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,24 +45,37 @@ public class AnthropicAutoConfigurationIT {
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 		.withPropertyValues("spring.ai.anthropic.apiKey=" + System.getenv("ANTHROPIC_API_KEY"))
-		.withConfiguration(AutoConfigurations.of(SpringAiRetryAutoConfiguration.class,
-				RestClientAutoConfiguration.class, AnthropicAutoConfiguration.class));
+		.withConfiguration(AutoConfigurations.of(AnthropicAutoConfiguration.class));
 
 	@Test
-	void generate() {
-		contextRunner.run(context -> {
-			AnthropicChatClient chatClient = context.getBean(AnthropicChatClient.class);
-			String response = chatClient.call("Hello");
+	void call() {
+		this.contextRunner.run(context -> {
+			AnthropicChatModel chatModel = context.getBean(AnthropicChatModel.class);
+			String response = chatModel.call("Hello");
 			assertThat(response).isNotEmpty();
 			logger.info("Response: " + response);
 		});
 	}
 
 	@Test
-	void generateStreaming() {
-		contextRunner.run(context -> {
-			AnthropicChatClient chatClient = context.getBean(AnthropicChatClient.class);
-			Flux<ChatResponse> responseFlux = chatClient.stream(new Prompt(new UserMessage("Hello")));
+	void callWith8KResponseContext() {
+		this.contextRunner
+			.withPropertyValues("spring.ai.anthropic.beta-version=" + AnthropicApi.BETA_MAX_TOKENS,
+					"spring.ai.anthropic.chat.options.model=" + AnthropicApi.ChatModel.CLAUDE_3_5_SONNET.getValue())
+			.run(context -> {
+				AnthropicChatModel chatModel = context.getBean(AnthropicChatModel.class);
+				var optoins = AnthropicChatOptions.builder().withMaxTokens(8192).build();
+				var response = chatModel.call(new Prompt("Tell me a joke", optoins));
+				assertThat(response.getResult().getOutput().getContent()).isNotEmpty();
+				logger.info("Response: " + response);
+			});
+	}
+
+	@Test
+	void stream() {
+		this.contextRunner.run(context -> {
+			AnthropicChatModel chatModel = context.getBean(AnthropicChatModel.class);
+			Flux<ChatResponse> responseFlux = chatModel.stream(new Prompt(new UserMessage("Hello")));
 
 			String response = responseFlux.collectList()
 				.block()

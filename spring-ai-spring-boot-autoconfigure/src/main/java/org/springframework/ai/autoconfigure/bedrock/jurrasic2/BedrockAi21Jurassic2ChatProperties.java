@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,7 +33,7 @@ public class BedrockAi21Jurassic2ChatProperties {
 	public static final String CONFIG_PREFIX = "spring.ai.bedrock.jurassic2.chat";
 
 	/**
-	 * Enable Bedrock Ai21Jurassic2 chat client. Disabled by default.
+	 * Enable Bedrock Ai21Jurassic2 chat model. Disabled by default.
 	 */
 	private boolean enabled = false;
 
@@ -45,7 +45,7 @@ public class BedrockAi21Jurassic2ChatProperties {
 
 	@NestedConfigurationProperty
 	private BedrockAi21Jurassic2ChatOptions options = BedrockAi21Jurassic2ChatOptions.builder()
-		.withTemperature(0.7f)
+		.withTemperature(0.7)
 		.withMaxTokens(500)
 		.build();
 

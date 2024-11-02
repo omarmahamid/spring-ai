@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.converter;
 
 import java.nio.charset.StandardCharsets;
@@ -40,6 +41,10 @@ public class MapOutputConverter extends AbstractMessageOutputConverter<Map<Strin
 
 	@Override
 	public Map<String, Object> convert(@NonNull String text) {
+		if (text.startsWith("```json") && text.endsWith("```")) {
+			text = text.substring(7, text.length() - 3);
+		}
+
 		Message<?> message = MessageBuilder.withPayload(text.getBytes(StandardCharsets.UTF_8)).build();
 		return (Map) this.getMessageConverter().fromMessage(message, HashMap.class);
 	}
@@ -50,7 +55,8 @@ public class MapOutputConverter extends AbstractMessageOutputConverter<Map<Strin
 				Your response should be in JSON format.
 				The data structure for the JSON should match this Java class: %s
 				Do not include any explanations, only provide a RFC8259 compliant JSON response following this format without deviation.
-				 """;
+				Remove the ```json markdown surrounding the output including the trailing "```".
+				""";
 		return String.format(raw, HashMap.class.getName());
 	}
 

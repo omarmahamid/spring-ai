@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,14 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.model.function;
 
 import java.lang.reflect.Type;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 
-import org.springframework.ai.model.function.FunctionCallbackWrapper.Builder.SchemaType;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.beans.BeansException;
 import org.springframework.cloud.function.context.catalog.FunctionTypeUtils;
 import org.springframework.cloud.function.context.config.FunctionContextUtils;
@@ -73,9 +75,10 @@ public class FunctionCallbackContext implements ApplicationContextAware {
 					"Functional bean with name: " + beanName + " does not exist in the context.");
 		}
 
-		if (!Function.class.isAssignableFrom(FunctionTypeUtils.getRawType(beanType))) {
+		if (!Function.class.isAssignableFrom(FunctionTypeUtils.getRawType(beanType))
+				&& !BiFunction.class.isAssignableFrom(FunctionTypeUtils.getRawType(beanType))) {
 			throw new IllegalArgumentException(
-					"Function call Bean must be of type Function. Found: " + beanType.getTypeName());
+					"Function call Bean must be of type Function or BiFunction. Found: " + beanType.getTypeName());
 		}
 
 		Type functionInputType = TypeResolverHelper.getFunctionArgumentType(beanType, 0);
@@ -86,7 +89,8 @@ public class FunctionCallbackContext implements ApplicationContextAware {
 
 		if (!StringUtils.hasText(functionDescription)) {
 			// Look for a Description annotation on the bean
-			Description descriptionAnnotation = applicationContext.findAnnotationOnBean(beanName, Description.class);
+			Description descriptionAnnotation = this.applicationContext.findAnnotationOnBean(beanName,
+					Description.class);
 
 			if (descriptionAnnotation != null) {
 				functionDescription = descriptionAnnotation.value();
@@ -118,9 +122,23 @@ public class FunctionCallbackContext implements ApplicationContextAware {
 				.withInputType(functionInputClass)
 				.build();
 		}
+		else if (bean instanceof BiFunction<?, ?, ?> biFunction) {
+			return FunctionCallbackWrapper.builder((BiFunction<?, ToolContext, ?>) biFunction)
+				.withName(functionName)
+				.withSchemaType(this.schemaType)
+				.withDescription(functionDescription)
+				.withInputType(functionInputClass)
+				.build();
+		}
 		else {
 			throw new IllegalArgumentException("Bean must be of type Function");
 		}
+	}
+
+	public enum SchemaType {
+
+		JSON_SCHEMA, OPEN_API_SCHEMA
+
 	}
 
 }

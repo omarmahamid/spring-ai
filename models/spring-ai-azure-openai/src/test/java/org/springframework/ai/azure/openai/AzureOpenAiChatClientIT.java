@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,191 +13,164 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.azure.openai;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
-import com.azure.ai.openai.OpenAIClient;
 import com.azure.ai.openai.OpenAIClientBuilder;
+import com.azure.ai.openai.OpenAIServiceVersion;
 import com.azure.core.credential.AzureKeyCredential;
+import com.azure.core.http.policy.HttpLogOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import reactor.core.publisher.Flux;
 
-import org.springframework.ai.chat.ChatResponse;
-import org.springframework.ai.chat.Generation;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.chat.prompt.SystemPromptTemplate;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.converter.BeanOutputConverter;
-import org.springframework.ai.converter.ListOutputConverter;
-import org.springframework.ai.converter.MapOutputConverter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
-import org.springframework.core.convert.support.DefaultConversionService;
+import org.springframework.core.io.Resource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * @author Soby Chacko
+ */
 @SpringBootTest(classes = AzureOpenAiChatClientIT.TestConfiguration.class)
 @EnabledIfEnvironmentVariable(named = "AZURE_OPENAI_API_KEY", matches = ".+")
 @EnabledIfEnvironmentVariable(named = "AZURE_OPENAI_ENDPOINT", matches = ".+")
-class AzureOpenAiChatClientIT {
+public class AzureOpenAiChatClientIT {
 
 	@Autowired
-	private AzureOpenAiChatClient chatClient;
+	private ChatClient chatClient;
 
-	record ActorsFilms(String actor, List<String> movies) {
-	}
-
-	@Test
-	void roleTest() {
-		Message systemMessage = new SystemPromptTemplate("""
-				You are a helpful AI assistant. Your name is {name}.
-				You are an AI assistant that helps people find information.
-				Your name is {name}
-				You should reply to the user's request with your name and also in the style of a {voice}.
-				""").createMessage(Map.of("name", "Bob", "voice", "pirate"));
-
-		UserMessage userMessage = new UserMessage("Generate the names of 5 famous pirates.");
-
-		Prompt prompt = new Prompt(List.of(userMessage, systemMessage));
-		ChatResponse response = chatClient.call(prompt);
-		assertThat(response.getResult().getOutput().getContent()).contains("Blackbeard");
-	}
+	@Value("classpath:/prompts/system-message.st")
+	private Resource systemTextResource;
 
 	@Test
-	void listOutputConverter() {
-		DefaultConversionService conversionService = new DefaultConversionService();
-		ListOutputConverter outputConverter = new ListOutputConverter(conversionService);
+	void call() {
 
-		String format = outputConverter.getFormat();
-		String template = """
-				List five {subject}
-				{format}
-				""";
-		PromptTemplate promptTemplate = new PromptTemplate(template,
-				Map.of("subject", "ice cream flavors", "format", format));
-		Prompt prompt = new Prompt(promptTemplate.createMessage());
-		Generation generation = chatClient.call(prompt).getResult();
+		// @formatter:off
+		ChatResponse response = this.chatClient.prompt()
+				.advisors(new SimpleLoggerAdvisor())
+				.system(s -> s.text(this.systemTextResource)
+						.param("name", "Bob")
+						.param("voice", "pirate"))
+				.user("Tell me about 3 famous pirates from the Golden Age of Piracy and what they did")
+				.call()
+				.chatResponse();
+		// @formatter:on
 
-		List<String> list = outputConverter.convert(generation.getOutput().getContent());
-		assertThat(list).hasSize(5);
-
-	}
-
-	@Test
-	void mapOutputConverter() {
-		MapOutputConverter outputConverter = new MapOutputConverter();
-
-		String format = outputConverter.getFormat();
-		String template = """
-				Provide me a List of {subject}
-				{format}
-				""";
-		PromptTemplate promptTemplate = new PromptTemplate(template,
-				Map.of("subject", "an array of numbers from 1 to 9 under they key name 'numbers'", "format", format));
-		Prompt prompt = new Prompt(promptTemplate.createMessage());
-		Generation generation = chatClient.call(prompt).getResult();
-
-		Map<String, Object> result = outputConverter.convert(generation.getOutput().getContent());
-		assertThat(result.get("numbers")).isEqualTo(Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-	}
-
-	@Test
-	void beanOutputConverter() {
-
-		BeanOutputConverter<ActorsFilms> outputConverter = new BeanOutputConverter<>(ActorsFilms.class);
-
-		String format = outputConverter.getFormat();
-		String template = """
-				Generate the filmography for a random actor.
-				{format}
-				""";
-		PromptTemplate promptTemplate = new PromptTemplate(template, Map.of("format", format));
-		Prompt prompt = new Prompt(promptTemplate.createMessage());
-		Generation generation = chatClient.call(prompt).getResult();
-
-		ActorsFilms actorsFilms = outputConverter.convert(generation.getOutput().getContent());
-		assertThat(actorsFilms.actor()).isNotNull();
-	}
-
-	record ActorsFilmsRecord(String actor, List<String> movies) {
-	}
-
-	@Test
-	void beanOutputConverterRecords() {
-
-		BeanOutputConverter<ActorsFilmsRecord> outputConverter = new BeanOutputConverter<>(ActorsFilmsRecord.class);
-
-		String format = outputConverter.getFormat();
-		String template = """
-				Generate the filmography of 5 movies for Tom Hanks.
-				{format}
-				""";
-		PromptTemplate promptTemplate = new PromptTemplate(template, Map.of("format", format));
-		Prompt prompt = new Prompt(promptTemplate.createMessage());
-		Generation generation = chatClient.call(prompt).getResult();
-
-		ActorsFilmsRecord actorsFilms = outputConverter.convert(generation.getOutput().getContent());
-		System.out.println(actorsFilms);
-		assertThat(actorsFilms.actor()).isEqualTo("Tom Hanks");
-		assertThat(actorsFilms.movies()).hasSize(5);
+		assertThat(response.getResults()).hasSize(1);
+		assertThat(response.getResults().get(0).getOutput().getContent()).contains("Blackbeard");
 	}
 
 	@Test
 	void beanStreamOutputConverterRecords() {
 
-		BeanOutputConverter<ActorsFilmsRecord> outputParser = new BeanOutputConverter<>(ActorsFilmsRecord.class);
+		BeanOutputConverter<ActorsFilms> outputConverter = new BeanOutputConverter<>(ActorsFilms.class);
 
-		String format = outputParser.getFormat();
-		String template = """
-				Generate the filmography of 5 movies for Tom Hanks.
-				{format}
-				""";
-		PromptTemplate promptTemplate = new PromptTemplate(template, Map.of("format", format));
-		Prompt prompt = new Prompt(promptTemplate.createMessage());
+		// @formatter:off
+		Flux<ChatResponse> chatResponse = this.chatClient
+				.prompt()
+				.advisors(new SimpleLoggerAdvisor())
+				.user(u -> u
+						.text("Generate the filmography of 5 movies for Tom Hanks. " + System.lineSeparator()
+								+ "{format}")
+						.param("format", outputConverter.getFormat()))
+				.stream()
+				.chatResponse();
 
-		String generationTextFromStream = chatClient.stream(prompt)
+		List<ChatResponse> chatResponses = chatResponse.collectList()
+				.block()
+				.stream()
+				.toList();
+
+		String generationTextFromStream = chatResponses
+				.stream()
+				.map(cr -> cr.getResult().getOutput().getContent())
+				.collect(Collectors.joining());
+		// @formatter:on
+
+		ActorsFilms actorsFilms = outputConverter.convert(generationTextFromStream);
+
+		assertThat(actorsFilms.actor()).isEqualTo("Tom Hanks");
+		assertThat(actorsFilms.movies()).hasSize(5);
+	}
+
+	@Test
+	void streamingAndImperativeResponsesContainIdenticalRelevantResults() {
+		String prompt = "Name all states in the USA and their capitals, add a space followed by a hyphen, then another space between the two. "
+				+ "List them with a numerical index. Do not use any abbreviations in state or capitals.";
+
+		// Imperative call
+		String rawDataFromImperativeCall = this.chatClient.prompt(prompt).call().content();
+		String imperativeStatesData = extractStatesData(rawDataFromImperativeCall);
+		String formattedImperativeResponse = formatResponse(imperativeStatesData);
+
+		// Streaming call
+		String stitchedResponseFromStream = this.chatClient.prompt(prompt)
+			.stream()
+			.content()
 			.collectList()
 			.block()
 			.stream()
-			.map(ChatResponse::getResults)
-			.flatMap(List::stream)
-			.map(Generation::getOutput)
-			.map(AssistantMessage::getContent)
-			.filter(Objects::nonNull)
 			.collect(Collectors.joining());
+		String streamingStatesData = extractStatesData(stitchedResponseFromStream);
+		String formattedStreamingResponse = formatResponse(streamingStatesData);
 
-		ActorsFilmsRecord actorsFilms = outputParser.convert(generationTextFromStream);
-		System.out.println(actorsFilms);
-		assertThat(actorsFilms.actor()).isEqualTo("Tom Hanks");
-		assertThat(actorsFilms.movies()).hasSize(5);
+		// Assertions
+		assertThat(formattedStreamingResponse).isEqualTo(formattedImperativeResponse);
+		assertThat(formattedStreamingResponse).contains("1. Alabama - Montgomery");
+		assertThat(formattedStreamingResponse).contains("50. Wyoming - Cheyenne");
+		assertThat(formattedStreamingResponse.lines().count()).isEqualTo(50);
+	}
+
+	private String extractStatesData(String rawData) {
+		int firstStateIndex = rawData.indexOf("1. Alabama - Montgomery");
+		String lastAlphabeticalState = "50. Wyoming - Cheyenne";
+		int lastStateIndex = rawData.indexOf(lastAlphabeticalState) + lastAlphabeticalState.length();
+		return rawData.substring(firstStateIndex, lastStateIndex);
+	}
+
+	private String formatResponse(String response) {
+		return String.join("\n", Arrays.stream(response.split("\n")).map(String::strip).toArray(String[]::new));
+	}
+
+	record ActorsFilms(String actor, List<String> movies) {
+
 	}
 
 	@SpringBootConfiguration
 	public static class TestConfiguration {
 
 		@Bean
-		public OpenAIClient openAIClient() {
+		public OpenAIClientBuilder openAIClient() {
 			return new OpenAIClientBuilder().credential(new AzureKeyCredential(System.getenv("AZURE_OPENAI_API_KEY")))
 				.endpoint(System.getenv("AZURE_OPENAI_ENDPOINT"))
-				.buildClient();
+				.serviceVersion(OpenAIServiceVersion.V2024_02_15_PREVIEW)
+				.httpLogOptions(new HttpLogOptions()
+					.setLogLevel(com.azure.core.http.policy.HttpLogDetailLevel.BODY_AND_HEADERS));
 		}
 
 		@Bean
-		public AzureOpenAiChatClient azureOpenAiChatClient(OpenAIClient openAIClient) {
-			return new AzureOpenAiChatClient(openAIClient,
-					AzureOpenAiChatOptions.builder().withDeploymentName("gpt-35-turbo").withMaxTokens(200).build());
+		public AzureOpenAiChatModel azureOpenAiChatModel(OpenAIClientBuilder openAIClientBuilder) {
+			return new AzureOpenAiChatModel(openAIClientBuilder,
+					AzureOpenAiChatOptions.builder().withDeploymentName("gpt-4o").withMaxTokens(1000).build());
 
+		}
+
+		@Bean
+		public ChatClient chatClient(AzureOpenAiChatModel azureOpenAiChatModel) {
+			return ChatClient.builder(azureOpenAiChatModel).build();
 		}
 
 	}

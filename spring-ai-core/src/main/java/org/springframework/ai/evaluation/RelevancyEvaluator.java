@@ -1,60 +1,60 @@
+/*
+ * Copyright 2023-2024 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.springframework.ai.evaluation;
 
-import org.springframework.ai.chat.ChatClient;
-import org.springframework.ai.chat.ChatResponse;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.MessageType;
-import org.springframework.ai.chat.prompt.ChatOptions;
-import org.springframework.ai.chat.prompt.ChatOptionsBuilder;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.model.Content;
-
 import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+
+import org.springframework.ai.chat.client.ChatClient;
 
 public class RelevancyEvaluator implements Evaluator {
 
 	private static final String DEFAULT_EVALUATION_PROMPT_TEXT = """
-			    Your task is to evaluate if the response for the query
-			    is in line with the context information provided.\\n
-			    You have two options to answer. Either YES/ NO.\\n
-			    Answer - YES, if the response for the query
-			    is in line with context information otherwise NO.\\n
-			    Query: \\n {query}\\n
-			    Response: \\n {response}\\n
-			    Context: \\n {context}\\n
-			    Answer: "
+				Your task is to evaluate if the response for the query
+				is in line with the context information provided.\\n
+				You have two options to answer. Either YES/ NO.\\n
+				Answer - YES, if the response for the query
+				is in line with context information otherwise NO.\\n
+				Query: \\n {query}\\n
+				Response: \\n {response}\\n
+				Context: \\n {context}\\n
+				Answer: "
 			""";
 
-	private final ChatOptions chatOptions;
+	private final ChatClient.Builder chatClientBuilder;
 
-	private ChatClient chatClient;
-
-	public RelevancyEvaluator(ChatClient chatClient) {
-		this(chatClient, ChatOptionsBuilder.builder().build());
-	}
-
-	public RelevancyEvaluator(ChatClient chatClient, ChatOptions chatOptions) {
-		this.chatClient = chatClient;
-		this.chatOptions = chatOptions;
+	public RelevancyEvaluator(ChatClient.Builder chatClientBuilder) {
+		this.chatClientBuilder = chatClientBuilder;
 	}
 
 	@Override
 	public EvaluationResponse evaluate(EvaluationRequest evaluationRequest) {
-		var query = doGetUserQuestion(evaluationRequest);
-		var response = doGetResponse(evaluationRequest);
+
+		var response = evaluationRequest.getResponseContent();
 		var context = doGetSupportingData(evaluationRequest);
 
-		var promptTemplate = new PromptTemplate(DEFAULT_EVALUATION_PROMPT_TEXT);
-		Message message = promptTemplate
-			.createMessage(Map.of("query", query, "response", response, "context", context));
+		String evaluationResponse = this.chatClientBuilder.build()
+			.prompt()
+			.user(userSpec -> userSpec.text(DEFAULT_EVALUATION_PROMPT_TEXT)
+				.param("query", evaluationRequest.getUserText())
+				.param("response", response)
+				.param("context", context))
+			.call()
+			.content();
 
-		ChatResponse chatResponse = this.chatClient.call(new Prompt(message, this.chatOptions));
-
-		var evaluationResponse = chatResponse.getResult().getOutput().getContent();
 		boolean passing = false;
 		float score = 0;
 		if (evaluationResponse.toLowerCase().contains("yes")) {
@@ -63,29 +63,6 @@ public class RelevancyEvaluator implements Evaluator {
 		}
 
 		return new EvaluationResponse(passing, score, "", Collections.emptyMap());
-	}
-
-	protected String doGetResponse(EvaluationRequest evaluationRequest) {
-		return evaluationRequest.getChatResponse().getResult().getOutput().getContent();
-	}
-
-	protected String doGetSupportingData(EvaluationRequest evaluationRequest) {
-		List<Content> data = evaluationRequest.getDataList();
-		String supportingData = data.stream()
-			.filter(node -> node != null && node.getContent() instanceof String)
-			.map(node -> (Content) node)
-			.map(Content::getContent)
-			.collect(Collectors.joining(System.lineSeparator()));
-		return supportingData;
-	}
-
-	protected String doGetUserQuestion(EvaluationRequest evaluationRequest) {
-		List<Message> instructions = evaluationRequest.getPrompt().getInstructions();
-		String userMessage = instructions.stream()
-			.filter(m -> m.getMessageType() == MessageType.USER)
-			.map(m -> m.getContent())
-			.collect(Collectors.joining(System.lineSeparator()));
-		return userMessage;
 	}
 
 }

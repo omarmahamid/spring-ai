@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,26 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.huggingface;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * @author Christian Tzolov
+ * @author Josh Long
+ * @author Mark Pollack
+ * @author Thomas Vitale
+ */
 @ConfigurationProperties(HuggingfaceChatProperties.CONFIG_PREFIX)
 public class HuggingfaceChatProperties {
 
 	public static final String CONFIG_PREFIX = "spring.ai.huggingface.chat";
 
+	/**
+	 * API Key to authenticate with the Inference Endpoint.
+	 */
 	private String apiKey;
 
+	/**
+	 * URL of the Inference Endpoint.
+	 */
 	private String url;
 
 	/**
-	 * Enable Huggingface chat client.
+	 * Enable Hugging Face chat model.
 	 */
 	private boolean enabled = true;
 
 	public String getApiKey() {
-		return apiKey;
+		return this.apiKey;
 	}
 
 	public void setApiKey(String apiKey) {
@@ -40,7 +53,7 @@ public class HuggingfaceChatProperties {
 	}
 
 	public String getUrl() {
-		return url;
+		return this.url;
 	}
 
 	public void setUrl(String url) {
@@ -48,7 +61,7 @@ public class HuggingfaceChatProperties {
 	}
 
 	public boolean isEnabled() {
-		return enabled;
+		return this.enabled;
 	}
 
 	public void setEnabled(boolean enabled) {

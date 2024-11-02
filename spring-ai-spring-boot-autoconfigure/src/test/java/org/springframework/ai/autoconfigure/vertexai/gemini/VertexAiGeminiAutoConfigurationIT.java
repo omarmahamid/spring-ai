@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.vertexai.gemini;
 
 import java.util.stream.Collectors;
@@ -23,10 +24,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import reactor.core.publisher.Flux;
 
-import org.springframework.ai.chat.ChatResponse;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatClient;
+import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatModel;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -45,9 +46,9 @@ public class VertexAiGeminiAutoConfigurationIT {
 
 	@Test
 	void generate() {
-		contextRunner.run(context -> {
-			VertexAiGeminiChatClient client = context.getBean(VertexAiGeminiChatClient.class);
-			String response = client.call("Hello");
+		this.contextRunner.run(context -> {
+			VertexAiGeminiChatModel chatModel = context.getBean(VertexAiGeminiChatModel.class);
+			String response = chatModel.call("Hello");
 			assertThat(response).isNotEmpty();
 			logger.info("Response: " + response);
 		});
@@ -55,12 +56,14 @@ public class VertexAiGeminiAutoConfigurationIT {
 
 	@Test
 	void generateStreaming() {
-		contextRunner.run(context -> {
-			VertexAiGeminiChatClient client = context.getBean(VertexAiGeminiChatClient.class);
-			Flux<ChatResponse> responseFlux = client.stream(new Prompt(new UserMessage("Hello")));
-			String response = responseFlux.collectList().block().stream().map(chatResponse -> {
-				return chatResponse.getResults().get(0).getOutput().getContent();
-			}).collect(Collectors.joining());
+		this.contextRunner.run(context -> {
+			VertexAiGeminiChatModel chatModel = context.getBean(VertexAiGeminiChatModel.class);
+			Flux<ChatResponse> responseFlux = chatModel.stream(new Prompt(new UserMessage("Hello")));
+			String response = responseFlux.collectList()
+				.block()
+				.stream()
+				.map(chatResponse -> chatResponse.getResults().get(0).getOutput().getContent())
+				.collect(Collectors.joining());
 
 			assertThat(response).isNotEmpty();
 			logger.info("Response: " + response);

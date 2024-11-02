@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,22 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.ai.evaluation;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.ChatClient;
-import org.springframework.ai.chat.ChatResponse;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
+package org.springframework.ai.evaluation;
 
 import java.util.List;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
@@ -38,7 +39,7 @@ public class BasicEvaluationTest {
 	private static final Logger logger = LoggerFactory.getLogger(BasicEvaluationTest.class);
 
 	@Autowired
-	protected ChatClient openAiChatClient;
+	protected ChatModel openAiChatModel;
 
 	@Value("classpath:/prompts/spring/test/evaluation/qa-evaluator-accurate-answer.st")
 	protected Resource qaEvaluatorAccurateAnswerResource;
@@ -52,28 +53,28 @@ public class BasicEvaluationTest {
 	@Value("classpath:/prompts/spring/test/evaluation/user-evaluator-message.st")
 	protected Resource userEvaluatorResource;
 
-	protected void evaluateQuestionAndAnswer(String question, ChatResponse response, boolean factBased) {
-		assertThat(response).isNotNull();
-		String answer = response.getResult().getOutput().getContent();
+	protected void evaluateQuestionAndAnswer(String question, String answer, boolean factBased) {
+		assertThat(question).isNotNull();
+		assertThat(answer).isNotNull();
 		logger.info("Question: " + question);
 		logger.info("Answer:" + answer);
-		PromptTemplate userPromptTemplate = new PromptTemplate(userEvaluatorResource,
+		PromptTemplate userPromptTemplate = new PromptTemplate(this.userEvaluatorResource,
 				Map.of("question", question, "answer", answer));
 		SystemMessage systemMessage;
 		if (factBased) {
-			systemMessage = new SystemMessage(qaEvaluatorFactBasedAnswerResource);
+			systemMessage = new SystemMessage(this.qaEvaluatorFactBasedAnswerResource);
 		}
 		else {
-			systemMessage = new SystemMessage(qaEvaluatorAccurateAnswerResource);
+			systemMessage = new SystemMessage(this.qaEvaluatorAccurateAnswerResource);
 		}
 		Message userMessage = userPromptTemplate.createMessage();
 		Prompt prompt = new Prompt(List.of(userMessage, systemMessage));
-		String yesOrNo = openAiChatClient.call(prompt).getResult().getOutput().getContent();
+		String yesOrNo = this.openAiChatModel.call(prompt).getResult().getOutput().getContent();
 		logger.info("Is Answer related to question: " + yesOrNo);
 		if (yesOrNo.equalsIgnoreCase("no")) {
-			SystemMessage notRelatedSystemMessage = new SystemMessage(qaEvaluatorNotRelatedResource);
+			SystemMessage notRelatedSystemMessage = new SystemMessage(this.qaEvaluatorNotRelatedResource);
 			prompt = new Prompt(List.of(userMessage, notRelatedSystemMessage));
-			String reasonForFailure = openAiChatClient.call(prompt).getResult().getOutput().getContent();
+			String reasonForFailure = this.openAiChatModel.call(prompt).getResult().getOutput().getContent();
 			fail(reasonForFailure);
 		}
 		else {

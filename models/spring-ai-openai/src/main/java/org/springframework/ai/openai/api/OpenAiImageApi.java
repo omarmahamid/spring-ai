@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,16 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.openai.api;
 
 import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import org.springframework.ai.openai.api.common.OpenAiApiConstants;
 import org.springframework.ai.retry.RetryUtils;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestClient;
 
@@ -38,11 +44,11 @@ public class OpenAiImageApi {
 	private final RestClient restClient;
 
 	/**
-	 * Create a new OpenAI Image api with base URL set to https://api.openai.com
+	 * Create a new OpenAI Image api with base URL set to {@code https://api.openai.com}.
 	 * @param openAiToken OpenAI apiKey.
 	 */
 	public OpenAiImageApi(String openAiToken) {
-		this(ApiUtils.DEFAULT_BASE_URL, openAiToken, RestClient.builder());
+		this(OpenAiApiConstants.DEFAULT_BASE_URL, openAiToken, RestClient.builder());
 	}
 
 	/**
@@ -58,17 +64,47 @@ public class OpenAiImageApi {
 	/**
 	 * Create a new OpenAI Image API with the provided base URL.
 	 * @param baseUrl the base URL for the OpenAI API.
-	 * @param openAiToken OpenAI apiKey.
+	 * @param apiKey OpenAI apiKey.
 	 * @param restClientBuilder the rest client builder to use.
 	 * @param responseErrorHandler the response error handler to use.
 	 */
-	public OpenAiImageApi(String baseUrl, String openAiToken, RestClient.Builder restClientBuilder,
+	public OpenAiImageApi(String baseUrl, String apiKey, RestClient.Builder restClientBuilder,
 			ResponseErrorHandler responseErrorHandler) {
+		this(baseUrl, apiKey, CollectionUtils.toMultiValueMap(Map.of()), restClientBuilder, responseErrorHandler);
+	}
 
+	/**
+	 * Create a new OpenAI Image API with the provided base URL.
+	 * @param baseUrl the base URL for the OpenAI API.
+	 * @param apiKey OpenAI apiKey.
+	 * @param headers the http headers to use.
+	 * @param restClientBuilder the rest client builder to use.
+	 * @param responseErrorHandler the response error handler to use.
+	 */
+	public OpenAiImageApi(String baseUrl, String apiKey, MultiValueMap<String, String> headers,
+			RestClient.Builder restClientBuilder, ResponseErrorHandler responseErrorHandler) {
+
+		// @formatter:off
 		this.restClient = restClientBuilder.baseUrl(baseUrl)
-			.defaultHeaders(ApiUtils.getJsonContentHeaders(openAiToken))
+			.defaultHeaders(h -> {
+				h.setBearerAuth(apiKey);
+				h.setContentType(MediaType.APPLICATION_JSON);
+				h.addAll(headers);
+			})
 			.defaultStatusHandler(responseErrorHandler)
 			.build();
+		// @formatter:on
+	}
+
+	public ResponseEntity<OpenAiImageResponse> createImage(OpenAiImageRequest openAiImageRequest) {
+		Assert.notNull(openAiImageRequest, "Image request cannot be null.");
+		Assert.hasLength(openAiImageRequest.prompt(), "Prompt cannot be empty.");
+
+		return this.restClient.post()
+			.uri("v1/images/generations")
+			.body(openAiImageRequest)
+			.retrieve()
+			.toEntity(OpenAiImageResponse.class);
 	}
 
 	/**
@@ -103,7 +139,7 @@ public class OpenAiImageApi {
 
 	// @formatter:off
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record OpenAiImageRequest (
+	public record OpenAiImageRequest(
 		@JsonProperty("prompt") String prompt,
 		@JsonProperty("model") String model,
 		@JsonProperty("n") Integer n,
@@ -123,24 +159,12 @@ public class OpenAiImageApi {
 		@JsonProperty("created") Long created,
 		@JsonProperty("data") List<Data> data) {
 	}
-
-	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record Data(
-		@JsonProperty("url") String url,
-		@JsonProperty("b64_json") String b64Json,
-		@JsonProperty("revised_prompt") String revisedPrompt) {
-	}
 	// @formatter:onn
 
-	public ResponseEntity<OpenAiImageResponse> createImage(OpenAiImageRequest openAiImageRequest) {
-		Assert.notNull(openAiImageRequest, "Image request cannot be null.");
-		Assert.hasLength(openAiImageRequest.prompt(), "Prompt cannot be empty.");
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record Data(@JsonProperty("url") String url, @JsonProperty("b64_json") String b64Json,
+			@JsonProperty("revised_prompt") String revisedPrompt) {
 
-		return this.restClient.post()
-			.uri("v1/images/generations")
-			.body(openAiImageRequest)
-			.retrieve()
-			.toEntity(OpenAiImageResponse.class);
 	}
 
 }

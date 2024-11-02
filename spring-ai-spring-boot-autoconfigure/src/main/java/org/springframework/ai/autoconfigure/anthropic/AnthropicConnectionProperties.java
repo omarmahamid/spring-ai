@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.anthropic;
 
 import org.springframework.ai.anthropic.api.AnthropicApi;
@@ -44,6 +45,12 @@ public class AnthropicConnectionProperties {
 	 */
 	private String version = AnthropicApi.DEFAULT_ANTHROPIC_VERSION;
 
+	/**
+	 * Beta features version. Such as tools-2024-04-04 or
+	 * max-tokens-3-5-sonnet-2024-07-15.
+	 */
+	private String betaVersion = AnthropicApi.DEFAULT_ANTHROPIC_BETA_VERSION;
+
 	public String getApiKey() {
 		return this.apiKey;
 	}
@@ -66,6 +73,14 @@ public class AnthropicConnectionProperties {
 
 	public void setVersion(String version) {
 		this.version = version;
+	}
+
+	public String getBetaVersion() {
+		return this.betaVersion;
+	}
+
+	public void setBetaVersion(String betaVersion) {
+		this.betaVersion = betaVersion;
 	}
 
 }

@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,27 +13,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.vectorstore.chroma;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.observation.ObservationRegistry;
 
 import org.springframework.ai.chroma.ChromaApi;
-import org.springframework.ai.embedding.EmbeddingClient;
+import org.springframework.ai.embedding.BatchingStrategy;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.TokenCountBatchingStrategy;
 import org.springframework.ai.vectorstore.ChromaVectorStore;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationConvention;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 /**
  * @author Christian Tzolov
  * @author Eddú Meléndez
+ * @author Soby Chacko
+ * @author Sebastien Deleuze
  */
 @AutoConfiguration
-@ConditionalOnClass({ EmbeddingClient.class, RestTemplate.class, ChromaVectorStore.class, ObjectMapper.class })
+@ConditionalOnClass({ EmbeddingModel.class, RestClient.class, ChromaVectorStore.class, ObjectMapper.class })
 @EnableConfigurationProperties({ ChromaApiProperties.class, ChromaVectorStoreProperties.class })
 public class ChromaVectorStoreAutoConfiguration {
 
@@ -45,21 +53,17 @@ public class ChromaVectorStoreAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
-	public RestTemplate restTemplate() {
-		return new RestTemplate();
-	}
-
-	@Bean
-	@ConditionalOnMissingBean
-	public ChromaApi chromaApi(ChromaApiProperties apiProperties, RestTemplate restTemplate,
-			ChromaConnectionDetails connectionDetails) {
+	public ChromaApi chromaApi(ChromaApiProperties apiProperties,
+			ObjectProvider<RestClient.Builder> restClientBuilderProvider, ChromaConnectionDetails connectionDetails,
+			ObjectMapper objectMapper) {
 
 		String chromaUrl = String.format("%s:%s", connectionDetails.getHost(), connectionDetails.getPort());
 
-		var chromaApi = new ChromaApi(chromaUrl, restTemplate, new ObjectMapper());
+		var chromaApi = new ChromaApi(chromaUrl, restClientBuilderProvider.getIfAvailable(RestClient::builder),
+				objectMapper);
 
-		if (StringUtils.hasText(apiProperties.getKeyToken())) {
-			chromaApi.withKeyToken(apiProperties.getKeyToken());
+		if (StringUtils.hasText(connectionDetails.getKeyToken())) {
+			chromaApi.withKeyToken(connectionDetails.getKeyToken());
 		}
 		else if (StringUtils.hasText(apiProperties.getUsername()) && StringUtils.hasText(apiProperties.getPassword())) {
 			chromaApi.withBasicAuthCredentials(apiProperties.getUsername(), apiProperties.getPassword());
@@ -69,13 +73,23 @@ public class ChromaVectorStoreAutoConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnMissingBean
-	public ChromaVectorStore vectorStore(EmbeddingClient embeddingClient, ChromaApi chromaApi,
-			ChromaVectorStoreProperties storeProperties) {
-		return new ChromaVectorStore(embeddingClient, chromaApi, storeProperties.getCollectionName());
+	@ConditionalOnMissingBean(BatchingStrategy.class)
+	BatchingStrategy chromaBatchingStrategy() {
+		return new TokenCountBatchingStrategy();
 	}
 
-	private static class PropertiesChromaConnectionDetails implements ChromaConnectionDetails {
+	@Bean
+	@ConditionalOnMissingBean
+	public ChromaVectorStore vectorStore(EmbeddingModel embeddingModel, ChromaApi chromaApi,
+			ChromaVectorStoreProperties storeProperties, ObjectProvider<ObservationRegistry> observationRegistry,
+			ObjectProvider<VectorStoreObservationConvention> customObservationConvention,
+			BatchingStrategy chromaBatchingStrategy) {
+		return new ChromaVectorStore(embeddingModel, chromaApi, storeProperties.getCollectionName(),
+				storeProperties.isInitializeSchema(), observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP),
+				customObservationConvention.getIfAvailable(() -> null), chromaBatchingStrategy);
+	}
+
+	static class PropertiesChromaConnectionDetails implements ChromaConnectionDetails {
 
 		private final ChromaApiProperties properties;
 
@@ -91,6 +105,11 @@ public class ChromaVectorStoreAutoConfiguration {
 		@Override
 		public int getPort() {
 			return this.properties.getPort();
+		}
+
+		@Override
+		public String getKeyToken() {
+			return this.properties.getKeyToken();
 		}
 
 	}

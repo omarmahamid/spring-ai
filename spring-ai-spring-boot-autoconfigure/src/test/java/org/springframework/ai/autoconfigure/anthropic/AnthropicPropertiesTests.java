@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,11 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.anthropic;
 
 import org.junit.jupiter.api.Test;
 
-import org.springframework.ai.anthropic.AnthropicChatClient;
+import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.autoconfigure.retry.SpringAiRetryAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
@@ -37,6 +38,8 @@ public class AnthropicPropertiesTests {
 		// @formatter:off
 					"spring.ai.anthropic.base-url=TEST_BASE_URL",
 					"spring.ai.anthropic.api-key=abc123",
+					"spring.ai.anthropic.version=6666",
+					"spring.ai.anthropic.beta-version=7777",
 					"spring.ai.anthropic.chat.options.model=MODEL_XYZ",
 					"spring.ai.anthropic.chat.options.temperature=0.55")
 				// @formatter:on
@@ -48,9 +51,11 @@ public class AnthropicPropertiesTests {
 
 				assertThat(connectionProperties.getApiKey()).isEqualTo("abc123");
 				assertThat(connectionProperties.getBaseUrl()).isEqualTo("TEST_BASE_URL");
+				assertThat(connectionProperties.getVersion()).isEqualTo("6666");
+				assertThat(connectionProperties.getBetaVersion()).isEqualTo("7777");
 
 				assertThat(chatProperties.getOptions().getModel()).isEqualTo("MODEL_XYZ");
-				assertThat(chatProperties.getOptions().getTemperature()).isEqualTo(0.55f);
+				assertThat(chatProperties.getOptions().getTemperature()).isEqualTo(0.55);
 				// enabled is true by default
 				assertThat(chatProperties.isEnabled()).isTrue();
 			});
@@ -85,8 +90,8 @@ public class AnthropicPropertiesTests {
 				assertThat(chatProperties.getOptions().getModel()).isEqualTo("MODEL_XYZ");
 				assertThat(chatProperties.getOptions().getMaxTokens()).isEqualTo(123);
 				assertThat(chatProperties.getOptions().getStopSequences()).contains("boza", "koza");
-				assertThat(chatProperties.getOptions().getTemperature()).isEqualTo(0.55f);
-				assertThat(chatProperties.getOptions().getTopP()).isEqualTo(0.56f);
+				assertThat(chatProperties.getOptions().getTemperature()).isEqualTo(0.55);
+				assertThat(chatProperties.getOptions().getTopP()).isEqualTo(0.56);
 				assertThat(chatProperties.getOptions().getTopK()).isEqualTo(100);
 
 				assertThat(chatProperties.getOptions().getMetadata().userId()).isEqualTo("MyUserId");
@@ -102,7 +107,7 @@ public class AnthropicPropertiesTests {
 					RestClientAutoConfiguration.class, AnthropicAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(AnthropicChatProperties.class)).isNotEmpty();
-				assertThat(context.getBeansOfType(AnthropicChatClient.class)).isNotEmpty();
+				assertThat(context.getBeansOfType(AnthropicChatModel.class)).isNotEmpty();
 			});
 
 		// Explicitly enable the chat auto-configuration.
@@ -111,7 +116,7 @@ public class AnthropicPropertiesTests {
 					RestClientAutoConfiguration.class, AnthropicAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(AnthropicChatProperties.class)).isNotEmpty();
-				assertThat(context.getBeansOfType(AnthropicChatClient.class)).isNotEmpty();
+				assertThat(context.getBeansOfType(AnthropicChatModel.class)).isNotEmpty();
 			});
 
 		// Explicitly disable the chat auto-configuration.
@@ -120,7 +125,7 @@ public class AnthropicPropertiesTests {
 					RestClientAutoConfiguration.class, AnthropicAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(AnthropicChatProperties.class)).isEmpty();
-				assertThat(context.getBeansOfType(AnthropicChatClient.class)).isEmpty();
+				assertThat(context.getBeansOfType(AnthropicChatModel.class)).isEmpty();
 			});
 	}
 

@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.anthropic.api;
 
 import java.util.List;
@@ -21,12 +22,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import reactor.core.publisher.Flux;
 
-import org.springframework.ai.anthropic.api.AnthropicApi.ChatCompletion;
-import org.springframework.ai.anthropic.api.AnthropicApi.RequestMessage;
+import org.springframework.ai.anthropic.api.AnthropicApi.AnthropicMessage;
 import org.springframework.ai.anthropic.api.AnthropicApi.ChatCompletionRequest;
-import org.springframework.ai.anthropic.api.AnthropicApi.MediaContent;
+import org.springframework.ai.anthropic.api.AnthropicApi.ChatCompletionResponse;
+import org.springframework.ai.anthropic.api.AnthropicApi.ContentBlock;
 import org.springframework.ai.anthropic.api.AnthropicApi.Role;
-import org.springframework.ai.anthropic.api.AnthropicApi.StreamResponse;
 import org.springframework.http.ResponseEntity;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,11 +42,11 @@ public class AnthropicApiIT {
 	@Test
 	void chatCompletionEntity() {
 
-		RequestMessage chatCompletionMessage = new RequestMessage(List.of(new MediaContent("Tell me a Joke?")),
+		AnthropicMessage chatCompletionMessage = new AnthropicMessage(List.of(new ContentBlock("Tell me a Joke?")),
 				Role.USER);
-		ResponseEntity<ChatCompletion> response = anthropicApi
+		ResponseEntity<ChatCompletionResponse> response = this.anthropicApi
 			.chatCompletionEntity(new ChatCompletionRequest(AnthropicApi.ChatModel.CLAUDE_3_OPUS.getValue(),
-					List.of(chatCompletionMessage), null, 100, 0.8f, false));
+					List.of(chatCompletionMessage), null, 100, 0.8, false));
 
 		System.out.println(response);
 		assertThat(response).isNotNull();
@@ -56,16 +56,15 @@ public class AnthropicApiIT {
 	@Test
 	void chatCompletionStream() {
 
-		RequestMessage chatCompletionMessage = new RequestMessage(List.of(new MediaContent("Tell me a Joke?")),
+		AnthropicMessage chatCompletionMessage = new AnthropicMessage(List.of(new ContentBlock("Tell me a Joke?")),
 				Role.USER);
 
-		Flux<StreamResponse> response = anthropicApi
-			.chatCompletionStream(new ChatCompletionRequest(AnthropicApi.ChatModel.CLAUDE_3_OPUS.getValue(),
-					List.of(chatCompletionMessage), null, 100, 0.8f, true));
+		Flux<ChatCompletionResponse> response = this.anthropicApi.chatCompletionStream(new ChatCompletionRequest(
+				AnthropicApi.ChatModel.CLAUDE_3_OPUS.getValue(), List.of(chatCompletionMessage), null, 100, 0.8, true));
 
 		assertThat(response).isNotNull();
 
-		List<StreamResponse> bla = response.collectList().block();
+		List<ChatCompletionResponse> bla = response.collectList().block();
 		assertThat(bla).isNotNull();
 
 		bla.stream().forEach(r -> System.out.println(r));

@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.reader.pdf;
 
 import java.awt.Rectangle;
@@ -22,9 +23,9 @@ import java.util.List;
 
 import org.apache.pdfbox.pdfparser.PDFParser;
 import org.apache.pdfbox.pdmodel.PDDocument;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.ai.reader.pdf.config.ParagraphManager;
@@ -48,8 +49,6 @@ import org.springframework.util.StringUtils;
  */
 public class ParagraphPdfDocumentReader implements DocumentReader {
 
-	private final Logger logger = LoggerFactory.getLogger(getClass());
-
 	// Constants for metadata keys
 	private static final String METADATA_START_PAGE = "page_number";
 
@@ -61,13 +60,15 @@ public class ParagraphPdfDocumentReader implements DocumentReader {
 
 	private static final String METADATA_FILE_NAME = "file_name";
 
+	protected final PDDocument document;
+
+	private final Logger logger = LoggerFactory.getLogger(getClass());
+
 	private final ParagraphManager paragraphTextExtractor;
 
-	private final PDDocument document;
+	protected String resourceFileName;
 
 	private PdfDocumentReaderConfig config;
-
-	private String resourceFileName;
 
 	/**
 	 * Constructs a ParagraphPdfDocumentReader using a resource URL.
@@ -155,7 +156,7 @@ public class ParagraphPdfDocumentReader implements DocumentReader {
 		return documents;
 	}
 
-	private Document toDocument(Paragraph from, Paragraph to) {
+	protected Document toDocument(Paragraph from, Paragraph to) {
 
 		String docText = this.getTextBetweenParagraphs(from, to);
 
@@ -164,13 +165,17 @@ public class ParagraphPdfDocumentReader implements DocumentReader {
 		}
 
 		Document document = new Document(docText);
+		addMetadata(from, to, document);
+
+		return document;
+	}
+
+	protected void addMetadata(Paragraph from, Paragraph to, Document document) {
 		document.getMetadata().put(METADATA_TITLE, from.title());
 		document.getMetadata().put(METADATA_START_PAGE, from.startPageNumber());
 		document.getMetadata().put(METADATA_END_PAGE, to.startPageNumber());
 		document.getMetadata().put(METADATA_LEVEL, from.level());
 		document.getMetadata().put(METADATA_FILE_NAME, this.resourceFileName);
-
-		return document;
 	}
 
 	public String getTextBetweenParagraphs(Paragraph fromParagraph, Paragraph toParagraph) {

@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,17 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.ai.vectorstore;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingClient;
-import org.springframework.core.io.Resource;
+package org.springframework.ai.vectorstore;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -32,6 +23,8 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -39,6 +32,25 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import io.micrometer.observation.ObservationRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.observation.conventions.VectorStoreProvider;
+import org.springframework.ai.observation.conventions.VectorStoreSimilarityMetric;
+import org.springframework.ai.util.JacksonUtils;
+import org.springframework.ai.vectorstore.observation.AbstractObservationVectorStore;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationContext;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationConvention;
+import org.springframework.core.io.Resource;
 
 /**
  * SimpleVectorStore is a simple implementation of the VectorStore interface.
@@ -54,32 +66,44 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Dingmeng Xue
  * @author Mark Pollack
  * @author Christian Tzolov
+ * @author Sebastien Deleuze
  */
-public class SimpleVectorStore implements VectorStore {
+public class SimpleVectorStore extends AbstractObservationVectorStore {
 
 	private static final Logger logger = LoggerFactory.getLogger(SimpleVectorStore.class);
 
+	private final ObjectMapper objectMapper;
+
 	protected Map<String, Document> store = new ConcurrentHashMap<>();
 
-	protected EmbeddingClient embeddingClient;
+	protected EmbeddingModel embeddingModel;
 
-	public SimpleVectorStore(EmbeddingClient embeddingClient) {
-		Objects.requireNonNull(embeddingClient, "EmbeddingClient must not be null");
-		this.embeddingClient = embeddingClient;
+	public SimpleVectorStore(EmbeddingModel embeddingModel) {
+		this(embeddingModel, ObservationRegistry.NOOP, null);
+	}
+
+	public SimpleVectorStore(EmbeddingModel embeddingModel, ObservationRegistry observationRegistry,
+			VectorStoreObservationConvention customObservationConvention) {
+
+		super(observationRegistry, customObservationConvention);
+
+		Objects.requireNonNull(embeddingModel, "EmbeddingModel must not be null");
+		this.embeddingModel = embeddingModel;
+		this.objectMapper = JsonMapper.builder().addModules(JacksonUtils.instantiateAvailableModules()).build();
 	}
 
 	@Override
-	public void add(List<Document> documents) {
+	public void doAdd(List<Document> documents) {
 		for (Document document : documents) {
-			logger.info("Calling EmbeddingClient for document id = {}", document.getId());
-			List<Double> embedding = this.embeddingClient.embed(document);
+			logger.info("Calling EmbeddingModel for document id = {}", document.getId());
+			float[] embedding = this.embeddingModel.embed(document);
 			document.setEmbedding(embedding);
 			this.store.put(document.getId(), document);
 		}
 	}
 
 	@Override
-	public Optional<Boolean> delete(List<String> idList) {
+	public Optional<Boolean> doDelete(List<String> idList) {
 		for (String id : idList) {
 			this.store.remove(id);
 		}
@@ -87,13 +111,13 @@ public class SimpleVectorStore implements VectorStore {
 	}
 
 	@Override
-	public List<Document> similaritySearch(SearchRequest request) {
+	public List<Document> doSimilaritySearch(SearchRequest request) {
 		if (request.getFilterExpression() != null) {
 			throw new UnsupportedOperationException(
 					"The [" + this.getClass() + "] doesn't support metadata filtering!");
 		}
 
-		List<Double> userQueryEmbedding = getUserQueryEmbedding(request.getQuery());
+		float[] userQueryEmbedding = getUserQueryEmbedding(request.getQuery());
 		return this.store.values()
 			.stream()
 			.map(entry -> new Similarity(entry.getId(),
@@ -114,7 +138,15 @@ public class SimpleVectorStore implements VectorStore {
 		try {
 			if (!file.exists()) {
 				logger.info("Creating new vector store file: {}", file);
-				file.createNewFile();
+				try {
+					Files.createFile(file.toPath());
+				}
+				catch (FileAlreadyExistsException e) {
+					throw new RuntimeException("File already exists: " + file, e);
+				}
+				catch (IOException e) {
+					throw new RuntimeException("Failed to create new file: " + file + ". Reason: " + e.getMessage(), e);
+				}
 			}
 			else {
 				logger.info("Overwriting existing vector store file: {}", file);
@@ -145,10 +177,10 @@ public class SimpleVectorStore implements VectorStore {
 	 */
 	public void load(File file) {
 		TypeReference<HashMap<String, Document>> typeRef = new TypeReference<>() {
+
 		};
-		ObjectMapper objectMapper = new ObjectMapper();
 		try {
-			Map<String, Document> deserializedMap = objectMapper.readValue(file, typeRef);
+			Map<String, Document> deserializedMap = this.objectMapper.readValue(file, typeRef);
 			this.store = deserializedMap;
 		}
 		catch (IOException ex) {
@@ -162,10 +194,10 @@ public class SimpleVectorStore implements VectorStore {
 	 */
 	public void load(Resource resource) {
 		TypeReference<HashMap<String, Document>> typeRef = new TypeReference<>() {
+
 		};
-		ObjectMapper objectMapper = new ObjectMapper();
 		try {
-			Map<String, Document> deserializedMap = objectMapper.readValue(resource.getInputStream(), typeRef);
+			Map<String, Document> deserializedMap = this.objectMapper.readValue(resource.getInputStream(), typeRef);
 			this.store = deserializedMap;
 		}
 		catch (IOException ex) {
@@ -174,8 +206,7 @@ public class SimpleVectorStore implements VectorStore {
 	}
 
 	private String getVectorDbAsJson() {
-		ObjectMapper objectMapper = new ObjectMapper();
-		ObjectWriter objectWriter = objectMapper.writerWithDefaultPrettyPrinter();
+		ObjectWriter objectWriter = this.objectMapper.writerWithDefaultPrettyPrinter();
 		String json;
 		try {
 			json = objectWriter.writeValueAsString(this.store);
@@ -186,8 +217,17 @@ public class SimpleVectorStore implements VectorStore {
 		return json;
 	}
 
-	private List<Double> getUserQueryEmbedding(String query) {
-		return this.embeddingClient.embed(query);
+	private float[] getUserQueryEmbedding(String query) {
+		return this.embeddingModel.embed(query);
+	}
+
+	@Override
+	public VectorStoreObservationContext.Builder createObservationContextBuilder(String operationName) {
+
+		return VectorStoreObservationContext.builder(VectorStoreProvider.SIMPLE.value(), operationName)
+			.withDimensions(this.embeddingModel.dimensions())
+			.withCollectionName("in-memory-map")
+			.withSimilarityMetric(VectorStoreSimilarityMetric.COSINE.value());
 	}
 
 	public static class Similarity {
@@ -203,23 +243,23 @@ public class SimpleVectorStore implements VectorStore {
 
 	}
 
-	public class EmbeddingMath {
+	public final class EmbeddingMath {
 
 		private EmbeddingMath() {
 			throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
 		}
 
-		public static double cosineSimilarity(List<Double> vectorX, List<Double> vectorY) {
+		public static double cosineSimilarity(float[] vectorX, float[] vectorY) {
 			if (vectorX == null || vectorY == null) {
 				throw new RuntimeException("Vectors must not be null");
 			}
-			if (vectorX.size() != vectorY.size()) {
+			if (vectorX.length != vectorY.length) {
 				throw new IllegalArgumentException("Vectors lengths must be equal");
 			}
 
-			double dotProduct = dotProduct(vectorX, vectorY);
-			double normX = norm(vectorX);
-			double normY = norm(vectorY);
+			float dotProduct = dotProduct(vectorX, vectorY);
+			float normX = norm(vectorX);
+			float normY = norm(vectorY);
 
 			if (normX == 0 || normY == 0) {
 				throw new IllegalArgumentException("Vectors cannot have zero norm");
@@ -228,20 +268,20 @@ public class SimpleVectorStore implements VectorStore {
 			return dotProduct / (Math.sqrt(normX) * Math.sqrt(normY));
 		}
 
-		public static double dotProduct(List<Double> vectorX, List<Double> vectorY) {
-			if (vectorX.size() != vectorY.size()) {
+		public static float dotProduct(float[] vectorX, float[] vectorY) {
+			if (vectorX.length != vectorY.length) {
 				throw new IllegalArgumentException("Vectors lengths must be equal");
 			}
 
-			double result = 0;
-			for (int i = 0; i < vectorX.size(); ++i) {
-				result += vectorX.get(i) * vectorY.get(i);
+			float result = 0;
+			for (int i = 0; i < vectorX.length; ++i) {
+				result += vectorX[i] * vectorY[i];
 			}
 
 			return result;
 		}
 
-		public static double norm(List<Double> vector) {
+		public static float norm(float[] vector) {
 			return dotProduct(vector, vector);
 		}
 

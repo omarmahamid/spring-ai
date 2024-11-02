@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,15 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.chat.messages;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -44,74 +42,38 @@ public abstract class AbstractMessage implements Message {
 
 	protected final String textContent;
 
-	protected final List<Media> mediaData;
-
 	/**
 	 * Additional options for the message to influence the response, not a generative map.
 	 */
 	protected final Map<String, Object> metadata;
 
-	protected AbstractMessage(MessageType messageType, String content) {
-		this(messageType, content, Map.of(MESSAGE_TYPE, messageType));
-	}
-
-	protected AbstractMessage(MessageType messageType, String content, Map<String, Object> metadata) {
+	protected AbstractMessage(MessageType messageType, String textContent, Map<String, Object> metadata) {
 		Assert.notNull(messageType, "Message type must not be null");
-		this.messageType = messageType;
-		this.textContent = content;
-		this.mediaData = new ArrayList<>();
-		this.metadata = new HashMap<>(metadata);
-		this.metadata.put(MESSAGE_TYPE, messageType);
-	}
-
-	protected AbstractMessage(MessageType messageType, String textContent, List<Media> mediaData) {
-		this(messageType, textContent, mediaData, Map.of(MESSAGE_TYPE, messageType));
-	}
-
-	protected AbstractMessage(MessageType messageType, String textContent, List<Media> mediaData,
-			Map<String, Object> metadata) {
-
-		Assert.notNull(messageType, "Message type must not be null");
-		Assert.notNull(textContent, "Content must not be null");
-		Assert.notNull(mediaData, "media data must not be null");
-
+		if (messageType == MessageType.SYSTEM || messageType == MessageType.USER) {
+			Assert.notNull(textContent, "Content must not be null for SYSTEM or USER messages");
+		}
 		this.messageType = messageType;
 		this.textContent = textContent;
-		this.mediaData = new ArrayList<>(mediaData);
 		this.metadata = new HashMap<>(metadata);
 		this.metadata.put(MESSAGE_TYPE, messageType);
 	}
 
-	protected AbstractMessage(MessageType messageType, Resource resource) {
-		this(messageType, resource, Collections.emptyMap());
-	}
-
-	@SuppressWarnings("null")
 	protected AbstractMessage(MessageType messageType, Resource resource, Map<String, Object> metadata) {
-		Assert.notNull(messageType, "Message type must not be null");
 		Assert.notNull(resource, "Resource must not be null");
-
-		this.messageType = messageType;
-		this.metadata = new HashMap<>(metadata);
-		this.metadata.put(MESSAGE_TYPE, messageType);
-		this.mediaData = new ArrayList<>();
-
 		try (InputStream inputStream = resource.getInputStream()) {
 			this.textContent = StreamUtils.copyToString(inputStream, Charset.defaultCharset());
 		}
 		catch (IOException ex) {
 			throw new RuntimeException("Failed to read resource", ex);
 		}
+		this.messageType = messageType;
+		this.metadata = new HashMap<>(metadata);
+		this.metadata.put(MESSAGE_TYPE, messageType);
 	}
 
 	@Override
 	public String getContent() {
 		return this.textContent;
-	}
-
-	@Override
-	public List<Media> getMedia() {
-		return this.mediaData;
 	}
 
 	@Override
@@ -125,22 +87,20 @@ public abstract class AbstractMessage implements Message {
 	}
 
 	@Override
-	public int hashCode() {
-		return Objects.hash(this.messageType, this.textContent, this.mediaData, this.metadata);
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (!(o instanceof AbstractMessage that)) {
+			return false;
+		}
+		return this.messageType == that.messageType && Objects.equals(this.textContent, that.textContent)
+				&& Objects.equals(this.metadata, that.metadata);
 	}
 
 	@Override
-	public boolean equals(Object obj) {
-		if (this == obj) {
-			return true;
-		}
-		if (obj == null || getClass() != obj.getClass()) {
-			return false;
-		}
-		AbstractMessage other = (AbstractMessage) obj;
-		return Objects.equals(this.messageType, other.messageType)
-				&& Objects.equals(this.textContent, other.textContent)
-				&& Objects.equals(this.mediaData, other.mediaData) && Objects.equals(this.metadata, other.metadata);
+	public int hashCode() {
+		return Objects.hash(this.messageType, this.textContent, this.metadata);
 	}
 
 }

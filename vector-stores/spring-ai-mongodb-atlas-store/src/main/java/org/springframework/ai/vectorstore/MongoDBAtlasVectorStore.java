@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.vectorstore;
 
 import java.util.ArrayList;
@@ -21,24 +22,35 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.mongodb.BasicDBObject;
+import com.mongodb.MongoCommandException;
+import io.micrometer.observation.ObservationRegistry;
 
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingClient;
+import org.springframework.ai.embedding.BatchingStrategy;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingOptionsBuilder;
+import org.springframework.ai.embedding.TokenCountBatchingStrategy;
+import org.springframework.ai.model.EmbeddingUtils;
+import org.springframework.ai.observation.conventions.VectorStoreProvider;
+import org.springframework.ai.vectorstore.observation.AbstractObservationVectorStore;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationContext;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationConvention;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.data.mongodb.UncategorizedMongoDbException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.util.Assert;
 
-import static org.springframework.data.mongodb.core.query.Criteria.where;
-
 /**
  * @author Chris Smith
+ * @author Soby Chacko
+ * @author Christian Tzolov
+ * @author Thomas Vitale
  * @since 1.0.0
  */
-public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
+public class MongoDBAtlasVectorStore extends AbstractObservationVectorStore implements InitializingBean {
 
 	public static final String ID_FIELD_NAME = "_id";
 
@@ -48,7 +60,7 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 
 	public static final String SCORE_FIELD_NAME = "score";
 
-	private static final String DEFAULT_VECTOR_COLLECTION_NAME = "vector_store";
+	public static final String DEFAULT_VECTOR_COLLECTION_NAME = "vector_store";
 
 	private static final String DEFAULT_VECTOR_INDEX_NAME = "vector_index";
 
@@ -56,45 +68,87 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 
 	private static final int DEFAULT_NUM_CANDIDATES = 200;
 
+	private static final int INDEX_ALREADY_EXISTS_ERROR_CODE = 68;
+
+	private static final String INDEX_ALREADY_EXISTS_ERROR_CODE_NAME = "IndexAlreadyExists";
+
 	private final MongoTemplate mongoTemplate;
 
-	private final EmbeddingClient embeddingClient;
+	private final EmbeddingModel embeddingModel;
 
 	private final MongoDBVectorStoreConfig config;
 
 	private final MongoDBAtlasFilterExpressionConverter filterExpressionConverter = new MongoDBAtlasFilterExpressionConverter();
 
-	public MongoDBAtlasVectorStore(MongoTemplate mongoTemplate, EmbeddingClient embeddingClient) {
-		this(mongoTemplate, embeddingClient, MongoDBVectorStoreConfig.defaultConfig());
+	private final boolean initializeSchema;
+
+	private final BatchingStrategy batchingStrategy;
+
+	public MongoDBAtlasVectorStore(MongoTemplate mongoTemplate, EmbeddingModel embeddingModel,
+			boolean initializeSchema) {
+		this(mongoTemplate, embeddingModel, MongoDBVectorStoreConfig.defaultConfig(), initializeSchema);
 	}
 
-	public MongoDBAtlasVectorStore(MongoTemplate mongoTemplate, EmbeddingClient embeddingClient,
-			MongoDBVectorStoreConfig config) {
+	public MongoDBAtlasVectorStore(MongoTemplate mongoTemplate, EmbeddingModel embeddingModel,
+			MongoDBVectorStoreConfig config, boolean initializeSchema) {
+		this(mongoTemplate, embeddingModel, config, initializeSchema, ObservationRegistry.NOOP, null,
+				new TokenCountBatchingStrategy());
+	}
+
+	public MongoDBAtlasVectorStore(MongoTemplate mongoTemplate, EmbeddingModel embeddingModel,
+			MongoDBVectorStoreConfig config, boolean initializeSchema, ObservationRegistry observationRegistry,
+			VectorStoreObservationConvention customObservationConvention, BatchingStrategy batchingStrategy) {
+
+		super(observationRegistry, customObservationConvention);
+
 		this.mongoTemplate = mongoTemplate;
-		this.embeddingClient = embeddingClient;
+		this.embeddingModel = embeddingModel;
 		this.config = config;
 
+		this.initializeSchema = initializeSchema;
+		this.batchingStrategy = batchingStrategy;
 	}
 
 	@Override
 	public void afterPropertiesSet() throws Exception {
-		// Create the collection if it does not exist
-		if (!mongoTemplate.collectionExists(this.config.collectionName)) {
-			mongoTemplate.createCollection(this.config.collectionName);
+		if (!this.initializeSchema) {
+			return;
 		}
-		// Create search index, command doesn't do anything if already existing
-		mongoTemplate.executeCommand(createSearchIndex());
+
+		// Create the collection if it does not exist
+		if (!this.mongoTemplate.collectionExists(this.config.collectionName)) {
+			this.mongoTemplate.createCollection(this.config.collectionName);
+		}
+		// Create search index
+		createSearchIndex();
+	}
+
+	private void createSearchIndex() {
+		try {
+			this.mongoTemplate.executeCommand(createSearchIndexDefinition());
+		}
+		catch (UncategorizedMongoDbException e) {
+			Throwable cause = e.getCause();
+			if (cause instanceof MongoCommandException commandException) {
+				// Ignore any IndexAlreadyExists errors
+				if (INDEX_ALREADY_EXISTS_ERROR_CODE == commandException.getCode()
+						|| INDEX_ALREADY_EXISTS_ERROR_CODE_NAME.equals(commandException.getErrorCodeName())) {
+					return;
+				}
+			}
+			throw e;
+		}
 	}
 
 	/**
 	 * Provides the Definition for the search index
 	 */
-	private org.bson.Document createSearchIndex() {
+	private org.bson.Document createSearchIndexDefinition() {
 		List<org.bson.Document> vectorFields = new ArrayList<>();
 
 		vectorFields.add(new org.bson.Document().append("type", "vector")
 			.append("path", this.config.pathName)
-			.append("numDimensions", this.embeddingClient.dimensions())
+			.append("numDimensions", this.embeddingModel.dimensions())
 			.append("similarity", "cosine"));
 
 		vectorFields.addAll(this.config.metadataFieldsToFilter.stream()
@@ -109,35 +163,32 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 	}
 
 	/**
-	 * Maps a BasicDBObject to a Spring AI Document
-	 * @param basicDBObject the basicDBObject to map to a spring ai document
-	 * @return the spring ai document
+	 * Maps a Bson Document to a Spring AI Document
+	 * @param mongoDocument the mongoDocument to map to a Spring AI Document
+	 * @return the Spring AI Document
 	 */
-	@SuppressWarnings("unchecked")
-	private Document mapBasicDbObject(BasicDBObject basicDBObject) {
-		String id = basicDBObject.getString(ID_FIELD_NAME);
-		String content = basicDBObject.getString(CONTENT_FIELD_NAME);
-		Map<String, Object> metadata = (Map<String, Object>) basicDBObject.get(METADATA_FIELD_NAME);
-		List<Double> embedding = (List<Double>) basicDBObject.get(this.config.pathName);
+	private Document mapMongoDocument(org.bson.Document mongoDocument, float[] queryEmbedding) {
+		String id = mongoDocument.getString(ID_FIELD_NAME);
+		String content = mongoDocument.getString(CONTENT_FIELD_NAME);
+		Map<String, Object> metadata = mongoDocument.get(METADATA_FIELD_NAME, org.bson.Document.class);
 
 		Document document = new Document(id, content, metadata);
-		document.setEmbedding(embedding);
+		document.setEmbedding(queryEmbedding);
 
 		return document;
 	}
 
 	@Override
-	public void add(List<Document> documents) {
+	public void doAdd(List<Document> documents) {
+		this.embeddingModel.embed(documents, EmbeddingOptionsBuilder.builder().build(), this.batchingStrategy);
 		for (Document document : documents) {
-			List<Double> embedding = this.embeddingClient.embed(document);
-			document.setEmbedding(embedding);
 			this.mongoTemplate.save(document, this.config.collectionName);
 		}
 	}
 
 	@Override
-	public Optional<Boolean> delete(List<String> idList) {
-		Query query = new Query(where(ID_FIELD_NAME).in(idList));
+	public Optional<Boolean> doDelete(List<String> idList) {
+		Query query = new Query(org.springframework.data.mongodb.core.query.Criteria.where(ID_FIELD_NAME).in(idList));
 
 		var deleteRes = this.mongoTemplate.remove(query, this.config.collectionName);
 		long deleteCount = deleteRes.getDeletedCount();
@@ -151,14 +202,14 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 	}
 
 	@Override
-	public List<Document> similaritySearch(SearchRequest request) {
+	public List<Document> doSimilaritySearch(SearchRequest request) {
 
 		String nativeFilterExpressions = (request.getFilterExpression() != null)
 				? this.filterExpressionConverter.convertExpression(request.getFilterExpression()) : "";
 
-		List<Double> queryEmbedding = this.embeddingClient.embed(request.getQuery());
-		var vectorSearch = new VectorSearchAggregation(queryEmbedding, this.config.pathName, this.config.numCandidates,
-				this.config.vectorIndexName, request.getTopK(), nativeFilterExpressions);
+		float[] queryEmbedding = this.embeddingModel.embed(request.getQuery());
+		var vectorSearch = new VectorSearchAggregation(EmbeddingUtils.toList(queryEmbedding), this.config.pathName,
+				this.config.numCandidates, this.config.vectorIndexName, request.getTopK(), nativeFilterExpressions);
 
 		Aggregation aggregation = Aggregation.newAggregation(vectorSearch,
 				Aggregation.addFields()
@@ -167,14 +218,23 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 					.build(),
 				Aggregation.match(new Criteria(SCORE_FIELD_NAME).gte(request.getSimilarityThreshold())));
 
-		return this.mongoTemplate.aggregate(aggregation, this.config.collectionName, BasicDBObject.class)
+		return this.mongoTemplate.aggregate(aggregation, this.config.collectionName, org.bson.Document.class)
 			.getMappedResults()
 			.stream()
-			.map(this::mapBasicDbObject)
+			.map(d -> mapMongoDocument(d, queryEmbedding))
 			.toList();
 	}
 
-	public static class MongoDBVectorStoreConfig {
+	@Override
+	public VectorStoreObservationContext.Builder createObservationContextBuilder(String operationName) {
+
+		return VectorStoreObservationContext.builder(VectorStoreProvider.MONGODB.value(), operationName)
+			.withCollectionName(this.config.collectionName)
+			.withDimensions(this.embeddingModel.dimensions())
+			.withFieldName(this.config.pathName);
+	}
+
+	public static final class MongoDBVectorStoreConfig {
 
 		private final String collectionName;
 
@@ -202,7 +262,7 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 			return builder().build();
 		}
 
-		public static class Builder {
+		public static final class Builder {
 
 			private String collectionName = DEFAULT_VECTOR_COLLECTION_NAME;
 

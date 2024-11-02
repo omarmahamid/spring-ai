@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,23 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.bedrock.anthropic3.api;
+
+import java.time.Duration;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.ai.bedrock.anthropic3.api.Anthropic3ChatBedrockApi.AnthropicChatRequest;
-import org.springframework.ai.bedrock.anthropic3.api.Anthropic3ChatBedrockApi.AnthropicChatResponse;
-import org.springframework.ai.bedrock.anthropic3.api.Anthropic3ChatBedrockApi.AnthropicChatStreamingResponse;
-import org.springframework.ai.bedrock.api.AbstractBedrockApi;
-import org.springframework.util.Assert;
 import reactor.core.publisher.Flux;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 
-import java.time.Duration;
-import java.util.List;
+import org.springframework.ai.bedrock.anthropic3.api.Anthropic3ChatBedrockApi.AnthropicChatRequest;
+import org.springframework.ai.bedrock.anthropic3.api.Anthropic3ChatBedrockApi.AnthropicChatResponse;
+import org.springframework.ai.bedrock.anthropic3.api.Anthropic3ChatBedrockApi.AnthropicChatStreamingResponse;
+import org.springframework.ai.bedrock.api.AbstractBedrockApi;
+import org.springframework.ai.model.ChatModelDescription;
+import org.springframework.util.Assert;
 
 /**
  * Based on Bedrock's <a href=
@@ -40,6 +43,7 @@ import java.util.List;
  *
  * @author Ben Middleton
  * @author Christian Tzolov
+ * @author Thomas Vitale
  * @author Wei Jiang
  * @since 1.0.0
  */
@@ -120,6 +124,76 @@ public class Anthropic3ChatBedrockApi extends
 
 	// Anthropic Claude models: https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-claude.html
 
+	@Override
+	public AnthropicChatResponse chatCompletion(AnthropicChatRequest anthropicRequest) {
+		Assert.notNull(anthropicRequest, "'anthropicRequest' must not be null");
+		return this.internalInvocation(anthropicRequest, AnthropicChatResponse.class);
+	}
+
+	@Override
+	public Flux<AnthropicChatStreamingResponse> chatCompletionStream(AnthropicChatRequest anthropicRequest) {
+		Assert.notNull(anthropicRequest, "'anthropicRequest' must not be null");
+		return this.internalInvocationStream(anthropicRequest, AnthropicChatStreamingResponse.class);
+	}
+
+	/**
+	 * Anthropic models version.
+	 */
+	public enum AnthropicChatModel implements ChatModelDescription {
+
+		/**
+		 * anthropic.claude-instant-v1
+		 */
+		CLAUDE_INSTANT_V1("anthropic.claude-instant-v1"),
+		/**
+		 * anthropic.claude-v2
+		 */
+		CLAUDE_V2("anthropic.claude-v2"),
+		/**
+		 * anthropic.claude-v2:1
+		 */
+		CLAUDE_V21("anthropic.claude-v2:1"),
+		/**
+		 * anthropic.claude-3-sonnet-20240229-v1:0
+		 */
+		CLAUDE_V3_SONNET("anthropic.claude-3-sonnet-20240229-v1:0"),
+		/**
+		 * anthropic.claude-3-haiku-20240307-v1:0
+		 */
+		CLAUDE_V3_HAIKU("anthropic.claude-3-haiku-20240307-v1:0"),
+		/**
+		 * anthropic.claude-3-opus-20240229-v1:0
+		 */
+		CLAUDE_V3_OPUS("anthropic.claude-3-opus-20240229-v1:0"),
+		/**
+		 * anthropic.claude-3-5-sonnet-20240620-v1:0
+		 */
+		CLAUDE_V3_5_SONNET("anthropic.claude-3-5-sonnet-20240620-v1:0"),
+		/**
+		 * anthropic.claude-3-5-sonnet-20241022-v2:0
+		 */
+		CLAUDE_V3_5_SONNET_V2("anthropic.claude-3-5-sonnet-20241022-v2:0");
+
+		private final String id;
+
+		AnthropicChatModel(String value) {
+			this.id = value;
+		}
+
+		/**
+		 * @return The model id.
+		 */
+		public String id() {
+			return this.id;
+		}
+
+		@Override
+		public String getName() {
+			return this.id;
+		}
+
+	}
+
 	/**
 	 * AnthropicChatRequest encapsulates the request parameters for the Anthropic messages model.
 	 * https://docs.anthropic.com/claude/reference/messages_post
@@ -145,10 +219,10 @@ public class Anthropic3ChatBedrockApi extends
 	public record AnthropicChatRequest(
 			@JsonProperty("messages") List<ChatCompletionMessage> messages,
 			@JsonProperty("system") String system,
-			@JsonProperty("temperature") Float temperature,
+			@JsonProperty("temperature") Double temperature,
 			@JsonProperty("max_tokens") Integer maxTokens,
 			@JsonProperty("top_k") Integer topK,
-			@JsonProperty("top_p") Float topP,
+			@JsonProperty("top_p") Double topP,
 			@JsonProperty("stop_sequences") List<String> stopSequences,
 			@JsonProperty("anthropic_version") String anthropicVersion) {
 
@@ -156,13 +230,13 @@ public class Anthropic3ChatBedrockApi extends
 			return new Builder(messages);
 		}
 
-		public static class Builder {
+		public static final class Builder {
 			private final List<ChatCompletionMessage> messages;
 			private String system;
-			private Float temperature;// = 0.7f;
-			private Integer maxTokens;// = 500;
-			private Integer topK;// = 10;
-			private Float topP;
+			private Double temperature; // = 0.7;
+			private Integer maxTokens; // = 500;
+			private Integer topK; // = 10;
+			private Double topP;
 			private List<String> stopSequences;
 			private String anthropicVersion;
 
@@ -174,7 +248,7 @@ public class Anthropic3ChatBedrockApi extends
 				this.system = system;
 				return this;
 			}
-			public Builder withTemperature(Float temperature) {
+			public Builder withTemperature(Double temperature) {
 				this.temperature = temperature;
 				return this;
 			}
@@ -189,7 +263,7 @@ public class Anthropic3ChatBedrockApi extends
 				return this;
 			}
 
-			public Builder withTopP(Float tpoP) {
+			public Builder withTopP(Double tpoP) {
 				this.topP = tpoP;
 				return this;
 			}
@@ -206,14 +280,14 @@ public class Anthropic3ChatBedrockApi extends
 
 			public AnthropicChatRequest build() {
 				return new AnthropicChatRequest(
-						messages,
-						system,
-						temperature,
-						maxTokens,
-						topK,
-						topP,
-						stopSequences,
-						anthropicVersion
+						this.messages,
+						this.system,
+						this.temperature,
+						this.maxTokens,
+						this.topK,
+						this.topP,
+						this.stopSequences,
+						this.anthropicVersion
 				);
 			}
 		}
@@ -227,7 +301,8 @@ public class Anthropic3ChatBedrockApi extends
 	 * responses.
 	 */
 	@JsonInclude(Include.NON_NULL)
-	public record MediaContent( // @formatter:off
+	public record MediaContent(
+			// @formatter:off
 		@JsonProperty("type") Type type,
 		@JsonProperty("source") Source source,
 		@JsonProperty("text") String text,
@@ -275,7 +350,8 @@ public class Anthropic3ChatBedrockApi extends
 		 * @param data The base64-encoded data of the content.
 		 */
 		@JsonInclude(Include.NON_NULL)
-		public record Source( // @formatter:off
+		public record Source(
+		// @formatter:off
 			@JsonProperty("type") String type,
 			@JsonProperty("media_type") String mediaType,
 			@JsonProperty("data") String data) {
@@ -284,7 +360,9 @@ public class Anthropic3ChatBedrockApi extends
 			public Source(String mediaType, String data) {
 				this("base64", mediaType, data);
 			}
+
 		}
+
 	}
 
 	/**
@@ -315,6 +393,7 @@ public class Anthropic3ChatBedrockApi extends
 			ASSISTANT
 
 		}
+
 	}
 
 	/**
@@ -327,6 +406,7 @@ public class Anthropic3ChatBedrockApi extends
 	@JsonInclude(Include.NON_NULL)
 	public record AnthropicUsage(@JsonProperty("input_tokens") Integer inputTokens,
 			@JsonProperty("output_tokens") Integer outputTokens) {
+
 	}
 
 	/**
@@ -354,6 +434,7 @@ public class Anthropic3ChatBedrockApi extends
 			@JsonProperty("stop_reason") String stopReason, @JsonProperty("stop_sequence") String stopSequence,
 			@JsonProperty("usage") AnthropicUsage usage,
 			@JsonProperty("amazon-bedrock-invocationMetrics") AmazonBedrockInvocationMetrics amazonBedrockInvocationMetrics) { // formatter:on
+
 	}
 
 	/**
@@ -430,64 +511,9 @@ public class Anthropic3ChatBedrockApi extends
 		@JsonInclude(Include.NON_NULL)
 		public record Delta(@JsonProperty("type") String type, @JsonProperty("text") String text,
 				@JsonProperty("stop_reason") String stopReason, @JsonProperty("stop_sequence") String stopSequence) {
-		}
-	}
 
-	/**
-	 * Anthropic models version.
-	 */
-	public enum AnthropicChatModel {
-
-		/**
-		 * anthropic.claude-instant-v1
-		 */
-		CLAUDE_INSTANT_V1("anthropic.claude-instant-v1"),
-		/**
-		 * anthropic.claude-v2
-		 */
-		CLAUDE_V2("anthropic.claude-v2"),
-		/**
-		 * anthropic.claude-v2:1
-		 */
-		CLAUDE_V21("anthropic.claude-v2:1"),
-		/**
-		 * anthropic.claude-3-sonnet-20240229-v1:0
-		 */
-		CLAUDE_V3_SONNET("anthropic.claude-3-sonnet-20240229-v1:0"),
-		/**
-		 * anthropic.claude-3-haiku-20240307-v1:0
-		 */
-		CLAUDE_V3_HAIKU("anthropic.claude-3-haiku-20240307-v1:0"),
-		/**
-		 * anthropic.claude-3-opus-20240229-v1:0
-		 */
-		CLAUDE_V3_OPUS("anthropic.claude-3-opus-20240229-v1:0");
-
-		private final String id;
-
-		/**
-		 * @return The model id.
-		 */
-		public String id() {
-			return id;
 		}
 
-		AnthropicChatModel(String value) {
-			this.id = value;
-		}
-
-	}
-
-	@Override
-	public AnthropicChatResponse chatCompletion(AnthropicChatRequest anthropicRequest) {
-		Assert.notNull(anthropicRequest, "'anthropicRequest' must not be null");
-		return this.internalInvocation(anthropicRequest, AnthropicChatResponse.class);
-	}
-
-	@Override
-	public Flux<AnthropicChatStreamingResponse> chatCompletionStream(AnthropicChatRequest anthropicRequest) {
-		Assert.notNull(anthropicRequest, "'anthropicRequest' must not be null");
-		return this.internalInvocationStream(anthropicRequest, AnthropicChatStreamingResponse.class);
 	}
 
 }

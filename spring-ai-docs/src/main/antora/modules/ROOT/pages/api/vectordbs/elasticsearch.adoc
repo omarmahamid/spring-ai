@@ -16,8 +16,12 @@ A running Elasticsearch instance. The following options are available:
 == Auto-configuration
 
 Spring AI provides Spring Boot auto-configuration for the Elasticsearch Vector Store.
-To enable it, add the following dependency to your project's Maven `pom.xml` file:
+To enable it, add the following dependency to your project's Maven `pom.xml` or Gradle `build.gradle` build files:
 
+[tabs]
+======
+Maven::
++
 [source,xml]
 ----
 <dependency>
@@ -26,22 +30,58 @@ To enable it, add the following dependency to your project's Maven `pom.xml` fil
 </dependency>
 ----
 
-or to your Gradle `build.gradle` build file.
-
+Gradle::
++
 [source,groovy]
 ----
 dependencies {
     implementation 'org.springframework.ai:spring-ai-elasticsearch-store-spring-boot-starter'
 }
 ----
+======
+
+[NOTE]
+--
+For spring-boot versions pre 3.3.0 it's necessary to explicitly add the elasticsearch-java dependency with version > 8.13.3, otherwise the older version used will be incompatible with the queries performed:
+[tabs]
+======
+Maven::
++
+[source,xml]
+----
+<dependency>
+    <groupId>co.elastic.clients</groupId>
+    <artifactId>elasticsearch-java</artifactId>
+    <version>8.13.3</version>
+</dependency>
+----
+
+Gradle::
++
+[source,groovy]
+----
+dependencies {
+    implementation 'co.elastic.clients:elasticsearch-java:8.13.3'
+}
+----
+======
+--
 
 TIP: Refer to the xref:getting-started.adoc#dependency-management[Dependency Management] section to add the Spring AI BOM to your build file.
 
 TIP: Refer to the xref:getting-started.adoc#repositories[Repositories] section to add Milestone and/or Snapshot Repositories to your build file.
 
-Please have a look at the list of <<elasticsearchvector-properties,configuration parameters>> for the vector store to learn about the default values and configuration options.
+The vector store implementation can initialize the requisite schema for you, but you must opt-in by specifying the `initializeSchema` boolean in the appropriate constructor or by setting `...initialize-schema=true` in the `application.properties` file.
+Alternatively you can opt-out the initialization and create the index manually using the Elasticsearch client, which can be useful if the index needs advanced mapping or additional configuration.
 
-Additionally, you will need a configured `EmbeddingClient` bean. Refer to the xref:api/embeddings.adoc#available-implementations[EmbeddingClient] section for more information.
+NOTE: this is a breaking change! In earlier versions of Spring AI, this schema initialization happened by default.
+
+
+
+Please have a look at the list of <<elasticsearchvector-properties,configuration parameters>> for the vector store to learn about the default values and configuration options.
+These properties can be also set by configuring the `ElasticsearchVectorStoreOptions` bean.
+
+Additionally, you will need a configured `EmbeddingModel` bean. Refer to the xref:api/embeddings.adoc#available-implementations[EmbeddingModel] section for more information.
 
 
 Now you can auto-wire the `ElasticsearchVectorStore` as a vector store in your application.
@@ -61,7 +101,7 @@ List <Document> documents = List.of(
 vectorStore.add(documents);
 
 // Retrieve documents similar to a query
-List<Document> results = vectorStore.similaritySearch(SearchRequest.query("Spring").withTopK(5));
+List<Document> results = this.vectorStore.similaritySearch(SearchRequest.query("Spring").withTopK(5));
 ----
 
 [[elasticsearchvector-properties]]
@@ -104,6 +144,7 @@ Spring Boot's auto-configuration feature for the Elasticsearch RestClient will c
 
 The Spring Boot properties starting with `spring.elasticsearch.*` are used to configure the Elasticsearch client:
 
+[stripes=even]
 |===
 |Property | Description | Default Value
 
@@ -121,14 +162,23 @@ The Spring Boot properties starting with `spring.elasticsearch.*` are used to co
 
 Properties starting with the `spring.ai.vectorstore.elasticsearch.*` prefix are used to configure `ElasticsearchVectorStore`.
 
+[stripes=even]
 |===
 |Property | Description | Default Value
 
+|`spring.ai.vectorstore.elasticsearch.initialize-schema`| Whether to initialize the required schema  | `false`
 |`spring.ai.vectorstore.elasticsearch.index-name` | The name of the index to store the vectors. | spring-ai-document-index
 |`spring.ai.vectorstore.elasticsearch.dimensions` | The number of dimensions in the vector. | 1536
-|`spring.ai.vectorstore.elasticsearch.dense-vector-indexing` | Whether to use dense vector indexing. | true
 |`spring.ai.vectorstore.elasticsearch.similarity` | The similarity function to use. | `cosine`
 |===
+
+The following similarity functions are available:
+
+* cosine
+* l2_norm
+* dot_product
+
+More details about each in the https://www.elastic.co/guide/en/elasticsearch/reference/master/dense-vector.html#dense-vector-params[Elasticsearch Documentation] on dense vectors.
 
 == Metadata Filtering
 
@@ -178,7 +228,7 @@ is converted into the proprietary Elasticsearch filter format:
 
 == Manual Configuration
 
-Instead of using the Spring Boot auto-configuration, you can manually configure the Elasticsearch vector store. \For this you need to add the `spring-ai-elasticsearch-store` to your project:
+Instead of using the Spring Boot auto-configuration, you can manually configure the Elasticsearch vector store. For this you need to add the `spring-ai-elasticsearch-store` to your project:
 
 [source,xml]
 ----
@@ -205,10 +255,11 @@ Read the link:https://www.elastic.co/guide/en/elasticsearch/client/java-api-clie
 ----
 @Bean
 public RestClient restClient() {
-    RestClientBuilder builder = RestClient.builder(new HttpHost("<host>", 9200, "http"));
-    Header[] defaultHeaders = new Header[] { new BasicHeader("Authorization", "Basic <encoded username and password>") };
-    builder.setDefaultHeaders(defaultHeaders);
-    return builder.build();
+    RestClient.builder(new HttpHost("<host>", 9200, "http"))
+        .setDefaultHeaders(new Header[]{
+            new BasicHeader("Authorization", "Basic <encoded username and password>")
+        })
+        .build();
 }
 ----
 
@@ -217,14 +268,14 @@ and then create the `ElasticsearchVectorStore` bean:
 [source,java]
 ----
 @Bean
-public ElasticsearchVectorStore vectorStore(EmbeddingClient embeddingClient, RestClient restClient) {
-    return new ElasticsearchVectorStore( restClient, embeddingClient);
+public ElasticsearchVectorStore vectorStore(EmbeddingModel embeddingModel, RestClient restClient) {
+    return new ElasticsearchVectorStore( restClient, embeddingModel);
 }
 
-// This can be any EmbeddingClient implementation.
+// This can be any EmbeddingModel implementation.
 @Bean
-public EmbeddingClient embeddingClient() {
-    return new OpenAiEmbeddingClient(new OpenAiApi(System.getenv("OPENAI_API_KEY")));
+public EmbeddingModel embeddingModel() {
+    return new OpenAiEmbeddingModel(new OpenAiApi(System.getenv("OPENAI_API_KEY")));
 }
 ----
 

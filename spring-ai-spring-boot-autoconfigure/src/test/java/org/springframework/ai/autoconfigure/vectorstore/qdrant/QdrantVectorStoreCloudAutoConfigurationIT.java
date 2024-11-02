@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.vectorstore.qdrant;
 
 import java.io.IOException;
@@ -30,8 +31,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingClient;
-import org.springframework.ai.transformers.TransformersEmbeddingClient;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.transformers.TransformersEmbeddingModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -46,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Test using a free tier Qdrant Cloud instance: https://cloud.qdrant.io
  *
  * @author Christian Tzolov
+ * @author Soby Chacko
  * @since 0.8.1
  */
 // NOTE: The free Qdrant Cluster and the QDRANT_API_KEY expire after 4 weeks of
@@ -65,6 +67,15 @@ public class QdrantVectorStoreCloudAutoConfigurationIT {
 
 	// NOTE: The GRPC port (usually 6334) is different from the HTTP port (usually 6333)!
 	private static final int CLOUD_GRPC_PORT = 6334;
+
+	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+		.withConfiguration(AutoConfigurations.of(QdrantVectorStoreAutoConfiguration.class))
+		.withUserConfiguration(Config.class)
+		.withPropertyValues("spring.ai.vectorstore.qdrant.port=" + CLOUD_GRPC_PORT,
+				"spring.ai.vectorstore.qdrant.host=" + CLOUD_HOST,
+				"spring.ai.vectorstore.qdrant.api-key=" + CLOUD_API_KEY,
+				"spring.ai.vectorstore.qdrant.collection-name=" + COLLECTION_NAME,
+				"spring.ai.vectorstore.qdrant.initializeSchema=true", "spring.ai.vectorstore.qdrant.use-tls=true");
 
 	List<Document> documents = List.of(
 			new Document(getText("classpath:/test/data/spring.ai.txt"), Map.of("spring", "great")),
@@ -91,38 +102,6 @@ public class QdrantVectorStoreCloudAutoConfigurationIT {
 		}
 	}
 
-	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-		.withConfiguration(AutoConfigurations.of(QdrantVectorStoreAutoConfiguration.class))
-		.withUserConfiguration(Config.class)
-		.withPropertyValues("spring.ai.vectorstore.qdrant.port=" + CLOUD_GRPC_PORT,
-				"spring.ai.vectorstore.qdrant.host=" + CLOUD_HOST,
-				"spring.ai.vectorstore.qdrant.api-key=" + CLOUD_API_KEY,
-				"spring.ai.vectorstore.qdrant.collection-name=" + COLLECTION_NAME,
-				"spring.ai.vectorstore.qdrant.use-tls=true");
-
-	@Test
-	public void addAndSearch() {
-		contextRunner.run(context -> {
-
-			VectorStore vectorStore = context.getBean(VectorStore.class);
-
-			vectorStore.add(documents);
-
-			List<Document> results = vectorStore
-				.similaritySearch(SearchRequest.query("What is Great Depression?").withTopK(1));
-
-			assertThat(results).hasSize(1);
-			Document resultDoc = results.get(0);
-			assertThat(resultDoc.getId()).isEqualTo(documents.get(2).getId());
-			assertThat(resultDoc.getMetadata()).containsKeys("depression", "distance");
-
-			// Remove all documents from the store
-			vectorStore.delete(documents.stream().map(doc -> doc.getId()).toList());
-			results = vectorStore.similaritySearch(SearchRequest.query("Great Depression").withTopK(1));
-			assertThat(results).hasSize(0);
-		});
-	}
-
 	public static String getText(String uri) {
 		var resource = new DefaultResourceLoader().getResource(uri);
 		try {
@@ -133,12 +112,35 @@ public class QdrantVectorStoreCloudAutoConfigurationIT {
 		}
 	}
 
+	@Test
+	public void addAndSearch() {
+		this.contextRunner.run(context -> {
+
+			VectorStore vectorStore = context.getBean(VectorStore.class);
+
+			vectorStore.add(this.documents);
+
+			List<Document> results = vectorStore
+				.similaritySearch(SearchRequest.query("What is Great Depression?").withTopK(1));
+
+			assertThat(results).hasSize(1);
+			Document resultDoc = results.get(0);
+			assertThat(resultDoc.getId()).isEqualTo(this.documents.get(2).getId());
+			assertThat(resultDoc.getMetadata()).containsKeys("depression", "distance");
+
+			// Remove all documents from the store
+			vectorStore.delete(this.documents.stream().map(doc -> doc.getId()).toList());
+			results = vectorStore.similaritySearch(SearchRequest.query("Great Depression").withTopK(1));
+			assertThat(results).hasSize(0);
+		});
+	}
+
 	@Configuration(proxyBeanMethods = false)
 	static class Config {
 
 		@Bean
-		public EmbeddingClient embeddingClient() {
-			return new TransformersEmbeddingClient();
+		public EmbeddingModel embeddingModel() {
+			return new TransformersEmbeddingModel();
 		}
 
 	}

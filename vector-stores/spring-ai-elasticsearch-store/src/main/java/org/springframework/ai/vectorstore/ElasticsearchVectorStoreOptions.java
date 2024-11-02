@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.vectorstore;
 
 /**
@@ -35,17 +36,12 @@ public class ElasticsearchVectorStoreOptions {
 	private int dimensions = 1536;
 
 	/**
-	 * Whether to use dense vector indexing.
-	 */
-	private boolean denseVectorIndexing = true;
-
-	/**
 	 * The similarity function to use.
 	 */
-	private String similarity = "cosine";
+	private SimilarityFunction similarity = SimilarityFunction.cosine;
 
 	public String getIndexName() {
-		return indexName;
+		return this.indexName;
 	}
 
 	public void setIndexName(String indexName) {
@@ -53,26 +49,18 @@ public class ElasticsearchVectorStoreOptions {
 	}
 
 	public int getDimensions() {
-		return dimensions;
+		return this.dimensions;
 	}
 
 	public void setDimensions(int dims) {
 		this.dimensions = dims;
 	}
 
-	public boolean isDenseVectorIndexing() {
-		return denseVectorIndexing;
+	public SimilarityFunction getSimilarity() {
+		return this.similarity;
 	}
 
-	public void setDenseVectorIndexing(boolean denseVectorIndexing) {
-		this.denseVectorIndexing = denseVectorIndexing;
-	}
-
-	public String getSimilarity() {
-		return similarity;
-	}
-
-	public void setSimilarity(String similarity) {
+	public void setSimilarity(SimilarityFunction similarity) {
 		this.similarity = similarity;
 	}
 

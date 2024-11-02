@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.bedrock.llama;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,7 +22,7 @@ import software.amazon.awssdk.regions.providers.AwsRegionProvider;
 
 import org.springframework.ai.autoconfigure.bedrock.BedrockAwsConnectionConfiguration;
 import org.springframework.ai.autoconfigure.bedrock.BedrockAwsConnectionProperties;
-import org.springframework.ai.bedrock.llama.BedrockLlamaChatClient;
+import org.springframework.ai.bedrock.llama.BedrockLlamaChatModel;
 import org.springframework.ai.bedrock.llama.api.LlamaChatBedrockApi;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -52,16 +53,18 @@ public class BedrockLlamaChatAutoConfiguration {
 	@ConditionalOnMissingBean
 	@ConditionalOnBean({ AwsCredentialsProvider.class, AwsRegionProvider.class })
 	public LlamaChatBedrockApi llamaApi(AwsCredentialsProvider credentialsProvider, AwsRegionProvider regionProvider,
-			BedrockLlamaChatProperties properties, BedrockAwsConnectionProperties awsProperties) {
+			BedrockLlamaChatProperties properties, BedrockAwsConnectionProperties awsProperties,
+			ObjectMapper objectMapper) {
 		return new LlamaChatBedrockApi(properties.getModel(), credentialsProvider, regionProvider.getRegion(),
-				new ObjectMapper(), awsProperties.getTimeout());
+				objectMapper, awsProperties.getTimeout());
 	}
 
 	@Bean
+	@ConditionalOnMissingBean
 	@ConditionalOnBean(LlamaChatBedrockApi.class)
-	public BedrockLlamaChatClient llamaChatClient(LlamaChatBedrockApi llamaApi, BedrockLlamaChatProperties properties) {
+	public BedrockLlamaChatModel llamaChatModel(LlamaChatBedrockApi llamaApi, BedrockLlamaChatProperties properties) {
 
-		return new BedrockLlamaChatClient(llamaApi, properties.getOptions());
+		return new BedrockLlamaChatModel(llamaApi, properties.getOptions());
 	}
 
 }

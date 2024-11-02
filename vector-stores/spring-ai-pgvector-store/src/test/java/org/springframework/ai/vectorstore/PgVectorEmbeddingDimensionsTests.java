@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.vectorstore;
 
 import org.junit.jupiter.api.Test;
@@ -20,14 +21,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import org.springframework.ai.embedding.EmbeddingClient;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.only;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * @author Christian Tzolov
@@ -36,7 +37,7 @@ import static org.mockito.Mockito.when;
 public class PgVectorEmbeddingDimensionsTests {
 
 	@Mock
-	private EmbeddingClient embeddingClient;
+	private EmbeddingModel embeddingModel;
 
 	@Mock
 	private JdbcTemplate jdbcTemplate;
@@ -46,32 +47,32 @@ public class PgVectorEmbeddingDimensionsTests {
 
 		final int explicitDimensions = 696;
 
-		var dim = new PgVectorStore(jdbcTemplate, embeddingClient, explicitDimensions).embeddingDimensions();
+		var dim = new PgVectorStore(this.jdbcTemplate, this.embeddingModel, explicitDimensions).embeddingDimensions();
 
 		assertThat(dim).isEqualTo(explicitDimensions);
-		verify(embeddingClient, never()).dimensions();
+		verify(this.embeddingModel, never()).dimensions();
 	}
 
 	@Test
-	public void embeddingClientDimensions() {
-		when(embeddingClient.dimensions()).thenReturn(969);
+	public void embeddingModelDimensions() {
+		given(this.embeddingModel.dimensions()).willReturn(969);
 
-		var dim = new PgVectorStore(jdbcTemplate, embeddingClient).embeddingDimensions();
+		var dim = new PgVectorStore(this.jdbcTemplate, this.embeddingModel).embeddingDimensions();
 
 		assertThat(dim).isEqualTo(969);
 
-		verify(embeddingClient, only()).dimensions();
+		verify(this.embeddingModel, only()).dimensions();
 	}
 
 	@Test
 	public void fallBackToDefaultDimensions() {
 
-		when(embeddingClient.dimensions()).thenThrow(new RuntimeException());
+		given(this.embeddingModel.dimensions()).willThrow(new RuntimeException());
 
-		var dim = new PgVectorStore(jdbcTemplate, embeddingClient).embeddingDimensions();
+		var dim = new PgVectorStore(this.jdbcTemplate, this.embeddingModel).embeddingDimensions();
 
 		assertThat(dim).isEqualTo(PgVectorStore.OPENAI_EMBEDDING_DIMENSION_SIZE);
-		verify(embeddingClient, only()).dimensions();
+		verify(this.embeddingModel, only()).dimensions();
 	}
 
 }

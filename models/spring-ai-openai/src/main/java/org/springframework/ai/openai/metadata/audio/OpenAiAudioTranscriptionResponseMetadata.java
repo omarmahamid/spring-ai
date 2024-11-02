@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,11 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.openai.metadata.audio;
 
+import org.springframework.ai.audio.transcription.AudioTranscriptionResponseMetadata;
 import org.springframework.ai.chat.metadata.EmptyRateLimit;
 import org.springframework.ai.chat.metadata.RateLimit;
-import org.springframework.ai.model.ResponseMetadata;
 import org.springframework.ai.openai.api.OpenAiAudioApi;
 import org.springframework.ai.openai.metadata.OpenAiRateLimit;
 import org.springframework.lang.Nullable;
@@ -27,27 +28,17 @@ import org.springframework.util.Assert;
  * Audio transcription metadata implementation for {@literal OpenAI}.
  *
  * @author Michael Lavelle
- * @since 0.8.1
+ * @author Piotr Olaszewski
  * @see RateLimit
+ * @since 0.8.1
  */
-public class OpenAiAudioTranscriptionResponseMetadata implements ResponseMetadata {
-
-	protected static final String AI_METADATA_STRING = "{ @type: %1$s, rateLimit: %4$s }";
+public class OpenAiAudioTranscriptionResponseMetadata extends AudioTranscriptionResponseMetadata {
 
 	public static final OpenAiAudioTranscriptionResponseMetadata NULL = new OpenAiAudioTranscriptionResponseMetadata() {
+
 	};
 
-	public static OpenAiAudioTranscriptionResponseMetadata from(OpenAiAudioApi.StructuredResponse result) {
-		Assert.notNull(result, "OpenAI Transcription must not be null");
-		OpenAiAudioTranscriptionResponseMetadata transcriptionResponseMetadata = new OpenAiAudioTranscriptionResponseMetadata();
-		return transcriptionResponseMetadata;
-	}
-
-	public static OpenAiAudioTranscriptionResponseMetadata from(String result) {
-		Assert.notNull(result, "OpenAI Transcription must not be null");
-		OpenAiAudioTranscriptionResponseMetadata transcriptionResponseMetadata = new OpenAiAudioTranscriptionResponseMetadata();
-		return transcriptionResponseMetadata;
-	}
+	protected static final String AI_METADATA_STRING = "{ @type: %1$s, rateLimit: %4$s }";
 
 	@Nullable
 	private RateLimit rateLimit;
@@ -58,6 +49,16 @@ public class OpenAiAudioTranscriptionResponseMetadata implements ResponseMetadat
 
 	protected OpenAiAudioTranscriptionResponseMetadata(@Nullable OpenAiRateLimit rateLimit) {
 		this.rateLimit = rateLimit;
+	}
+
+	public static OpenAiAudioTranscriptionResponseMetadata from(OpenAiAudioApi.StructuredResponse result) {
+		Assert.notNull(result, "OpenAI Transcription must not be null");
+		return new OpenAiAudioTranscriptionResponseMetadata();
+	}
+
+	public static OpenAiAudioTranscriptionResponseMetadata from(String result) {
+		Assert.notNull(result, "OpenAI Transcription must not be null");
+		return new OpenAiAudioTranscriptionResponseMetadata();
 	}
 
 	@Nullable

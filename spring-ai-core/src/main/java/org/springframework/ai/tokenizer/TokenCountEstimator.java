@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package org.springframework.ai.tokenizer;
 
-import org.springframework.ai.model.Content;
+import org.springframework.ai.model.MediaContent;
 
 /**
  * Estimates the number of tokens in a given text or message.
@@ -39,13 +39,13 @@ public interface TokenCountEstimator {
 	 * for.
 	 * @return the estimated number of tokens.
 	 */
-	int estimate(Content content);
+	int estimate(MediaContent content);
 
 	/**
 	 * Estimates the number of tokens in the given messages.
 	 * @param messages the messages to estimate the number of tokens for.
 	 * @return the estimated number of tokens.
 	 */
-	int estimate(Iterable<Content> messages);
+	int estimate(Iterable<MediaContent> messages);
 
 }

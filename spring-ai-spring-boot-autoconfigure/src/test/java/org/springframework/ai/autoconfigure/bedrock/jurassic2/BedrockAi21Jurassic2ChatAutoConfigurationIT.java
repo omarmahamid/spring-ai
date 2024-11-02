@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,24 +16,25 @@
 
 package org.springframework.ai.autoconfigure.bedrock.jurassic2;
 
+import java.util.List;
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import software.amazon.awssdk.regions.Region;
+
 import org.springframework.ai.autoconfigure.bedrock.BedrockAwsConnectionProperties;
 import org.springframework.ai.autoconfigure.bedrock.jurrasic2.BedrockAi21Jurassic2ChatAutoConfiguration;
 import org.springframework.ai.autoconfigure.bedrock.jurrasic2.BedrockAi21Jurassic2ChatProperties;
-import org.springframework.ai.bedrock.jurassic2.BedrockAi21Jurassic2ChatClient;
+import org.springframework.ai.bedrock.jurassic2.BedrockAi21Jurassic2ChatModel;
 import org.springframework.ai.bedrock.jurassic2.api.Ai21Jurassic2ChatBedrockApi;
-import org.springframework.ai.chat.ChatResponse;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import software.amazon.awssdk.regions.Region;
-
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -68,10 +69,10 @@ public class BedrockAi21Jurassic2ChatAutoConfigurationIT {
 
 	@Test
 	public void chatCompletion() {
-		contextRunner.run(context -> {
-			BedrockAi21Jurassic2ChatClient ai21Jurassic2ChatClient = context
-				.getBean(BedrockAi21Jurassic2ChatClient.class);
-			ChatResponse response = ai21Jurassic2ChatClient.call(new Prompt(List.of(userMessage, systemMessage)));
+		this.contextRunner.run(context -> {
+			BedrockAi21Jurassic2ChatModel ai21Jurassic2ChatModel = context.getBean(BedrockAi21Jurassic2ChatModel.class);
+			ChatResponse response = ai21Jurassic2ChatModel
+				.call(new Prompt(List.of(this.userMessage, this.systemMessage)));
 			assertThat(response.getResult().getOutput().getContent()).contains("Blackbeard");
 		});
 	}
@@ -111,7 +112,7 @@ public class BedrockAi21Jurassic2ChatAutoConfigurationIT {
 			.withConfiguration(AutoConfigurations.of(BedrockAi21Jurassic2ChatAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(BedrockAi21Jurassic2ChatProperties.class)).isEmpty();
-				assertThat(context.getBeansOfType(BedrockAi21Jurassic2ChatClient.class)).isEmpty();
+				assertThat(context.getBeansOfType(BedrockAi21Jurassic2ChatModel.class)).isEmpty();
 			});
 
 		// Explicitly enable the chat auto-configuration.
@@ -119,7 +120,7 @@ public class BedrockAi21Jurassic2ChatAutoConfigurationIT {
 			.withConfiguration(AutoConfigurations.of(BedrockAi21Jurassic2ChatAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(BedrockAi21Jurassic2ChatProperties.class)).isNotEmpty();
-				assertThat(context.getBeansOfType(BedrockAi21Jurassic2ChatClient.class)).isNotEmpty();
+				assertThat(context.getBeansOfType(BedrockAi21Jurassic2ChatModel.class)).isNotEmpty();
 			});
 
 		// Explicitly disable the chat auto-configuration.
@@ -127,7 +128,7 @@ public class BedrockAi21Jurassic2ChatAutoConfigurationIT {
 			.withConfiguration(AutoConfigurations.of(BedrockAi21Jurassic2ChatAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(BedrockAi21Jurassic2ChatProperties.class)).isEmpty();
-				assertThat(context.getBeansOfType(BedrockAi21Jurassic2ChatClient.class)).isEmpty();
+				assertThat(context.getBeansOfType(BedrockAi21Jurassic2ChatModel.class)).isEmpty();
 			});
 	}
 

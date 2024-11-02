@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,16 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.ai.aot;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.aot.hint.TypeReference;
-import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
-import org.springframework.core.type.filter.AnnotationTypeFilter;
-import org.springframework.core.type.filter.TypeFilter;
+package org.springframework.ai.aot;
 
 import java.lang.reflect.Executable;
 import java.util.Arrays;
@@ -31,17 +23,34 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.springframework.aot.hint.TypeReference;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.core.type.filter.TypeFilter;
+
 /**
- * Native runtime hints. See other modules for their respective native runtime hints.
+ * Utility methods for creating native runtime hints. See other modules for their
+ * respective native runtime hints.
  *
  * @author Josh Long
  * @author Christian Tzolov
  * @author Mark Pollack
  */
-public class AiRuntimeHints {
+public abstract class AiRuntimeHints {
 
 	private static final Logger log = LoggerFactory.getLogger(AiRuntimeHints.class);
 
+	/**
+	 * Finds classes in a package that are annotated with JsonInclude or have Jackson
+	 * annotations.
+	 * @param packageName The name of the package to search for annotated classes.
+	 * @return A set of TypeReference objects representing the annotated classes found.
+	 */
 	public static Set<TypeReference> findJsonAnnotatedClassesInPackage(String packageName) {
 		var annotationTypeFilter = new AnnotationTypeFilter(JsonInclude.class);
 		TypeFilter typeFilter = (metadataReader, metadataReaderFactory) -> {
@@ -58,10 +67,22 @@ public class AiRuntimeHints {
 		return findClassesInPackage(packageName, typeFilter);
 	}
 
+	/**
+	 * Finds classes in a package that are annotated with JsonInclude or have Jackson
+	 * annotations.
+	 * @param packageClass The class in the package to search for annotated classes.
+	 * @return A set of TypeReference objects representing the annotated classes found.
+	 */
 	public static Set<TypeReference> findJsonAnnotatedClassesInPackage(Class<?> packageClass) {
 		return findJsonAnnotatedClassesInPackage(packageClass.getPackageName());
 	}
 
+	/**
+	 * Finds all classes in the specified package that match the given type filter.
+	 * @param packageName The name of the package to scan for classes.
+	 * @param typeFilter The type filter used to filter the scanned classes.
+	 * @return A set of TypeReference objects representing the found classes.
+	 */
 	public static Set<TypeReference> findClassesInPackage(String packageName, TypeFilter typeFilter) {
 		var classPathScanningCandidateComponentProvider = new ClassPathScanningCandidateComponentProvider(false);
 		classPathScanningCandidateComponentProvider.addIncludeFilter(typeFilter);
@@ -70,8 +91,9 @@ public class AiRuntimeHints {
 			.stream()//
 			.map(bd -> TypeReference.of(Objects.requireNonNull(bd.getBeanClassName())))//
 			.peek(tr -> {
-				if (log.isDebugEnabled())
+				if (log.isDebugEnabled()) {
 					log.debug("registering [" + tr.getName() + ']');
+				}
 			})
 			.collect(Collectors.toUnmodifiableSet());
 	}

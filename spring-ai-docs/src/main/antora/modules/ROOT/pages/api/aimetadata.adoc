@@ -42,7 +42,7 @@ class MyService {
 
         Prompt prompt = createPrompt(request);
 
-        ChatResponse response = chatClient.call(prompt);
+        ChatResponse response = chatModel.call(prompt);
 
         // Process the chat response
 
@@ -97,7 +97,7 @@ The `RateLimit` instance can be acquired from the `GenerationMetadata`, like so:
 ----
 RateLimit rateLimit = generationMetadata.getRateLimit();
 
-Long tokensRemaining = rateLimit.getTokensRemaining();
+Long tokensRemaining = this.rateLimit.getTokensRemaining();
 
 // do something interesting with the RateLimit metadata
 ----

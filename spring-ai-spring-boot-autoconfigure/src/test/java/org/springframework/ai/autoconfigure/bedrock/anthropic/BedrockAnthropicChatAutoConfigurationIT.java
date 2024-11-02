@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.bedrock.anthropic;
 
 import java.util.List;
@@ -21,19 +22,19 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import reactor.core.publisher.Flux;
 import software.amazon.awssdk.regions.Region;
 
 import org.springframework.ai.autoconfigure.bedrock.BedrockAwsConnectionProperties;
-import org.springframework.ai.bedrock.anthropic.BedrockAnthropicChatClient;
+import org.springframework.ai.bedrock.anthropic.BedrockAnthropicChatModel;
 import org.springframework.ai.bedrock.anthropic.api.AnthropicChatBedrockApi.AnthropicChatModel;
-import org.springframework.ai.chat.ChatResponse;
-import org.springframework.ai.chat.Generation;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.SystemPromptTemplate;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -68,20 +69,21 @@ public class BedrockAnthropicChatAutoConfigurationIT {
 
 	@Test
 	public void chatCompletion() {
-		contextRunner.run(context -> {
-			BedrockAnthropicChatClient anthropicChatClient = context.getBean(BedrockAnthropicChatClient.class);
-			ChatResponse response = anthropicChatClient.call(new Prompt(List.of(userMessage, systemMessage)));
+		this.contextRunner.run(context -> {
+			BedrockAnthropicChatModel anthropicChatModel = context.getBean(BedrockAnthropicChatModel.class);
+			ChatResponse response = anthropicChatModel.call(new Prompt(List.of(this.userMessage, this.systemMessage)));
 			assertThat(response.getResult().getOutput().getContent()).contains("Blackbeard");
 		});
 	}
 
 	@Test
 	public void chatCompletionStreaming() {
-		contextRunner.run(context -> {
+		this.contextRunner.run(context -> {
 
-			BedrockAnthropicChatClient anthropicChatClient = context.getBean(BedrockAnthropicChatClient.class);
+			BedrockAnthropicChatModel anthropicChatModel = context.getBean(BedrockAnthropicChatModel.class);
 
-			Flux<ChatResponse> response = anthropicChatClient.stream(new Prompt(List.of(userMessage, systemMessage)));
+			Flux<ChatResponse> response = anthropicChatModel
+				.stream(new Prompt(List.of(this.userMessage, this.systemMessage)));
 
 			List<ChatResponse> responses = response.collectList().block();
 			assertThat(responses.size()).isGreaterThan(2);
@@ -130,7 +132,7 @@ public class BedrockAnthropicChatAutoConfigurationIT {
 			.withConfiguration(AutoConfigurations.of(BedrockAnthropicChatAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(BedrockAnthropicChatProperties.class)).isEmpty();
-				assertThat(context.getBeansOfType(BedrockAnthropicChatClient.class)).isEmpty();
+				assertThat(context.getBeansOfType(BedrockAnthropicChatModel.class)).isEmpty();
 			});
 
 		// Explicitly enable the chat auto-configuration.
@@ -138,7 +140,7 @@ public class BedrockAnthropicChatAutoConfigurationIT {
 			.withConfiguration(AutoConfigurations.of(BedrockAnthropicChatAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(BedrockAnthropicChatProperties.class)).isNotEmpty();
-				assertThat(context.getBeansOfType(BedrockAnthropicChatClient.class)).isNotEmpty();
+				assertThat(context.getBeansOfType(BedrockAnthropicChatModel.class)).isNotEmpty();
 			});
 
 		// Explicitly disable the chat auto-configuration.
@@ -146,7 +148,7 @@ public class BedrockAnthropicChatAutoConfigurationIT {
 			.withConfiguration(AutoConfigurations.of(BedrockAnthropicChatAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(BedrockAnthropicChatProperties.class)).isEmpty();
-				assertThat(context.getBeansOfType(BedrockAnthropicChatClient.class)).isEmpty();
+				assertThat(context.getBeansOfType(BedrockAnthropicChatModel.class)).isEmpty();
 			});
 	}
 

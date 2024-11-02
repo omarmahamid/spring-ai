@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.bedrock.titan;
 
 import java.util.Base64;
@@ -23,8 +24,8 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import software.amazon.awssdk.regions.Region;
 
 import org.springframework.ai.autoconfigure.bedrock.BedrockAwsConnectionProperties;
-import org.springframework.ai.bedrock.titan.BedrockTitanEmbeddingClient;
-import org.springframework.ai.bedrock.titan.BedrockTitanEmbeddingClient.InputType;
+import org.springframework.ai.bedrock.titan.BedrockTitanEmbeddingModel;
+import org.springframework.ai.bedrock.titan.BedrockTitanEmbeddingModel.InputType;
 import org.springframework.ai.bedrock.titan.api.TitanEmbeddingBedrockApi.TitanEmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -51,32 +52,32 @@ public class BedrockTitanEmbeddingAutoConfigurationIT {
 
 	@Test
 	public void singleTextEmbedding() {
-		contextRunner.withPropertyValues("spring.ai.bedrock.titan.embedding.inputType=TEXT").run(context -> {
-			BedrockTitanEmbeddingClient embeddingClient = context.getBean(BedrockTitanEmbeddingClient.class);
-			assertThat(embeddingClient).isNotNull();
-			EmbeddingResponse embeddingResponse = embeddingClient.embedForResponse(List.of("Hello World"));
+		this.contextRunner.withPropertyValues("spring.ai.bedrock.titan.embedding.inputType=TEXT").run(context -> {
+			BedrockTitanEmbeddingModel embeddingModel = context.getBean(BedrockTitanEmbeddingModel.class);
+			assertThat(embeddingModel).isNotNull();
+			EmbeddingResponse embeddingResponse = embeddingModel.embedForResponse(List.of("Hello World"));
 			assertThat(embeddingResponse.getResults()).hasSize(1);
 			assertThat(embeddingResponse.getResults().get(0).getOutput()).isNotEmpty();
-			assertThat(embeddingClient.dimensions()).isEqualTo(1024);
+			assertThat(embeddingModel.dimensions()).isEqualTo(1024);
 		});
 	}
 
 	@Test
 	public void singleImageEmbedding() {
-		contextRunner.withPropertyValues("spring.ai.bedrock.titan.embedding.inputType=IMAGE").run(context -> {
-			BedrockTitanEmbeddingClient embeddingClient = context.getBean(BedrockTitanEmbeddingClient.class);
-			assertThat(embeddingClient).isNotNull();
+		this.contextRunner.withPropertyValues("spring.ai.bedrock.titan.embedding.inputType=IMAGE").run(context -> {
+			BedrockTitanEmbeddingModel embeddingModel = context.getBean(BedrockTitanEmbeddingModel.class);
+			assertThat(embeddingModel).isNotNull();
 
 			byte[] image = new DefaultResourceLoader().getResource("classpath:/spring_framework.png")
 				.getContentAsByteArray();
 
 			var base64Image = Base64.getEncoder().encodeToString(image);
 
-			EmbeddingResponse embeddingResponse = embeddingClient.embedForResponse(List.of(base64Image));
+			EmbeddingResponse embeddingResponse = embeddingModel.embedForResponse(List.of(base64Image));
 
 			assertThat(embeddingResponse.getResults()).hasSize(1);
 			assertThat(embeddingResponse.getResults().get(0).getOutput()).isNotEmpty();
-			assertThat(embeddingClient.dimensions()).isEqualTo(1024);
+			assertThat(embeddingModel.dimensions()).isEqualTo(1024);
 		});
 	}
 
@@ -111,7 +112,7 @@ public class BedrockTitanEmbeddingAutoConfigurationIT {
 			.withConfiguration(AutoConfigurations.of(BedrockTitanEmbeddingAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(BedrockTitanEmbeddingProperties.class)).isEmpty();
-				assertThat(context.getBeansOfType(BedrockTitanEmbeddingClient.class)).isEmpty();
+				assertThat(context.getBeansOfType(BedrockTitanEmbeddingModel.class)).isEmpty();
 			});
 
 		// Explicitly enable the embedding auto-configuration.
@@ -119,7 +120,7 @@ public class BedrockTitanEmbeddingAutoConfigurationIT {
 			.withConfiguration(AutoConfigurations.of(BedrockTitanEmbeddingAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(BedrockTitanEmbeddingProperties.class)).isNotEmpty();
-				assertThat(context.getBeansOfType(BedrockTitanEmbeddingClient.class)).isNotEmpty();
+				assertThat(context.getBeansOfType(BedrockTitanEmbeddingModel.class)).isNotEmpty();
 			});
 
 		// Explicitly disable the embedding auto-configuration.
@@ -127,7 +128,7 @@ public class BedrockTitanEmbeddingAutoConfigurationIT {
 			.withConfiguration(AutoConfigurations.of(BedrockTitanEmbeddingAutoConfiguration.class))
 			.run(context -> {
 				assertThat(context.getBeansOfType(BedrockTitanEmbeddingProperties.class)).isEmpty();
-				assertThat(context.getBeansOfType(BedrockTitanEmbeddingClient.class)).isEmpty();
+				assertThat(context.getBeansOfType(BedrockTitanEmbeddingModel.class)).isEmpty();
 			});
 	}
 

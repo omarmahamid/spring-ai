@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,18 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.autoconfigure.vectorstore.milvus;
 
 import java.util.concurrent.TimeUnit;
 
+import io.micrometer.observation.ObservationRegistry;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.param.ConnectParam;
 import io.milvus.param.IndexType;
 import io.milvus.param.MetricType;
 
-import org.springframework.ai.embedding.EmbeddingClient;
+import org.springframework.ai.embedding.BatchingStrategy;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.TokenCountBatchingStrategy;
 import org.springframework.ai.vectorstore.MilvusVectorStore;
 import org.springframework.ai.vectorstore.MilvusVectorStore.MilvusVectorStoreConfig;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationConvention;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -35,9 +41,11 @@ import org.springframework.util.StringUtils;
 /**
  * @author Christian Tzolov
  * @author Eddú Meléndez
+ * @author Soby Chacko
+ * @author Ilayaperumal Gopinathan
  */
 @AutoConfiguration
-@ConditionalOnClass({ MilvusVectorStore.class, EmbeddingClient.class })
+@ConditionalOnClass({ MilvusVectorStore.class, EmbeddingModel.class })
 @EnableConfigurationProperties({ MilvusServiceClientProperties.class, MilvusVectorStoreProperties.class })
 public class MilvusVectorStoreAutoConfiguration {
 
@@ -49,9 +57,17 @@ public class MilvusVectorStoreAutoConfiguration {
 	}
 
 	@Bean
+	@ConditionalOnMissingBean(BatchingStrategy.class)
+	BatchingStrategy milvusBatchingStrategy() {
+		return new TokenCountBatchingStrategy();
+	}
+
+	@Bean
 	@ConditionalOnMissingBean
-	public MilvusVectorStore vectorStore(MilvusServiceClient milvusClient, EmbeddingClient embeddingClient,
-			MilvusVectorStoreProperties properties) {
+	public MilvusVectorStore vectorStore(MilvusServiceClient milvusClient, EmbeddingModel embeddingModel,
+			MilvusVectorStoreProperties properties, BatchingStrategy batchingStrategy,
+			ObjectProvider<ObservationRegistry> observationRegistry,
+			ObjectProvider<VectorStoreObservationConvention> customObservationConvention) {
 
 		MilvusVectorStoreConfig config = MilvusVectorStoreConfig.builder()
 			.withCollectionName(properties.getCollectionName())
@@ -60,9 +76,16 @@ public class MilvusVectorStoreAutoConfiguration {
 			.withMetricType(MetricType.valueOf(properties.getMetricType().name()))
 			.withIndexParameters(properties.getIndexParameters())
 			.withEmbeddingDimension(properties.getEmbeddingDimension())
+			.withIDFieldName(properties.getIdFieldName())
+			.withAutoId(properties.isAutoId())
+			.withContentFieldName(properties.getContentFieldName())
+			.withMetadataFieldName(properties.getMetadataFieldName())
+			.withEmbeddingFieldName(properties.getEmbeddingFieldName())
 			.build();
 
-		return new MilvusVectorStore(milvusClient, embeddingClient, config);
+		return new MilvusVectorStore(milvusClient, embeddingModel, config, properties.isInitializeSchema(),
+				batchingStrategy, observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP),
+				customObservationConvention.getIfAvailable(() -> null));
 	}
 
 	@Bean
@@ -113,8 +136,7 @@ public class MilvusVectorStoreAutoConfiguration {
 		return new MilvusServiceClient(builder.build());
 	}
 
-	private static class PropertiesMilvusServiceClientConnectionDetails
-			implements MilvusServiceClientConnectionDetails {
+	static class PropertiesMilvusServiceClientConnectionDetails implements MilvusServiceClientConnectionDetails {
 
 		private final MilvusServiceClientProperties properties;
 

@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.vertexai.palm2.api;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -24,7 +26,9 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 
+import org.springframework.ai.util.JacksonUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpResponse;
@@ -86,6 +90,7 @@ import org.springframework.web.client.RestClient;
  * https://ai.google.dev/api/rest#rest-resource:-v1.models
  *
  * @author Christian Tzolov
+ * @author Thomas Vitale
  */
 public class VertexAiPaLm2Api {
 
@@ -114,6 +119,8 @@ public class VertexAiPaLm2Api {
 
 	private final String embeddingModel;
 
+	private final ObjectMapper objectMapper;
+
 	/**
 	 * Create a new chat completion api.
 	 * @param apiKey vertex apiKey.
@@ -136,6 +143,7 @@ public class VertexAiPaLm2Api {
 		this.chatModel = model;
 		this.embeddingModel = embeddingModel;
 		this.apiKey = apiKey;
+		this.objectMapper = JsonMapper.builder().addModules(JacksonUtils.instantiateAvailableModules()).build();
 
 		Consumer<HttpHeaders> jsonContentHeaders = headers -> {
 			headers.setAccept(List.of(MediaType.APPLICATION_JSON));
@@ -152,7 +160,7 @@ public class VertexAiPaLm2Api {
 			public void handleError(ClientHttpResponse response) throws IOException {
 				if (response.getStatusCode().isError()) {
 					throw new RuntimeException(String.format("%s - %s", response.getStatusCode().value(),
-							new ObjectMapper().readValue(response.getBody(), ResponseError.class)));
+							objectMapper.readValue(response.getBody(), ResponseError.class)));
 				}
 			}
 		};
@@ -198,10 +206,6 @@ public class VertexAiPaLm2Api {
 				.body(EmbeddingResponse.class);
 
 		return response != null ? response.embedding() : null;
-	}
-
-	@JsonInclude(Include.NON_NULL)
-	record BatchEmbeddingResponse(List<Embedding> embeddings) {
 	}
 
 	/**
@@ -287,6 +291,10 @@ public class VertexAiPaLm2Api {
 			.body(Model.class);
 	}
 
+	@JsonInclude(Include.NON_NULL)
+	record BatchEmbeddingResponse(List<Embedding> embeddings) {
+	}
+
 	/**
 	 * API error response.
 	 *
@@ -352,8 +360,8 @@ public class VertexAiPaLm2Api {
 			@JsonProperty("inputTokenLimit") Integer inputTokenLimit,
 			@JsonProperty("outputTokenLimit") Integer outputTokenLimit,
 			@JsonProperty("supportedGenerationMethods") List<String> supportedGenerationMethods,
-			@JsonProperty("temperature") Float temperature,
-			@JsonProperty("topP") Float topP,
+			@JsonProperty("temperature") Double temperature,
+			@JsonProperty("topP") Double topP,
 			@JsonProperty("topK") Integer topK) {
 	}
 
@@ -364,8 +372,17 @@ public class VertexAiPaLm2Api {
 	 */
 	@JsonInclude(Include.NON_NULL)
 	public record Embedding(
-			@JsonProperty("value") List<Double> value) {
+			@JsonProperty("value") float[] value) {
 
+		@Override
+		public final int hashCode() {
+			return Arrays.hashCode(this.value);
+		}
+
+		@Override
+		public final boolean equals(Object arg0) {
+			return Arrays.equals(this.value,((Embedding) arg0).value);
+		}
 	}
 
 	/**
@@ -518,9 +535,9 @@ public class VertexAiPaLm2Api {
 	@JsonInclude(Include.NON_NULL)
 	public record GenerateMessageRequest(
 			@JsonProperty("prompt") MessagePrompt prompt,
-			@JsonProperty("temperature") Float temperature,
+			@JsonProperty("temperature") Double temperature,
 			@JsonProperty("candidateCount") Integer candidateCount,
-			@JsonProperty("topP") Float topP,
+			@JsonProperty("topP") Double topP,
 			@JsonProperty("topK") Integer topK) {
 
 		/**
@@ -539,7 +556,7 @@ public class VertexAiPaLm2Api {
 		 * @param temperature (optional) Controls the randomness of the output.
 		 * @param topK (optional) The maximum number of tokens to consider when sampling.
 		 */
-		public GenerateMessageRequest(MessagePrompt prompt, Float temperature, Integer topK) {
+		public GenerateMessageRequest(MessagePrompt prompt, Double temperature, Integer topK) {
 			this(prompt, temperature, null, null, topK);
 		}
 	}

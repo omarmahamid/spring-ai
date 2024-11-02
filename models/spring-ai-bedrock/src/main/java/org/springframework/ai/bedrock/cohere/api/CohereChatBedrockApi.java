@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,8 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// @formatter:off
+
 package org.springframework.ai.bedrock.cohere.api;
+
+// @formatter:off
 
 import java.time.Duration;
 import java.util.List;
@@ -30,6 +32,7 @@ import software.amazon.awssdk.regions.Region;
 import org.springframework.ai.bedrock.api.AbstractBedrockApi;
 import org.springframework.ai.bedrock.cohere.api.CohereChatBedrockApi.CohereChatRequest;
 import org.springframework.ai.bedrock.cohere.api.CohereChatBedrockApi.CohereChatResponse;
+import org.springframework.ai.model.ChatModelDescription;
 import org.springframework.util.Assert;
 
 /**
@@ -37,6 +40,7 @@ import org.springframework.util.Assert;
  * https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-cohere.html
  *
  * @author Christian Tzolov
+ * @author Thomas Vitale
  * @author Wei Jiang
  * @since 0.8.0
  */
@@ -107,6 +111,52 @@ public class CohereChatBedrockApi extends
 		super(modelId, credentialsProvider, region, objectMapper, timeout);
 	}
 
+	@Override
+	public CohereChatResponse chatCompletion(CohereChatRequest request) {
+		Assert.isTrue(!request.stream(), "The request must be configured to return the complete response!");
+		return this.internalInvocation(request, CohereChatResponse.class);
+	}
+
+	@Override
+	public Flux<CohereChatResponse.Generation> chatCompletionStream(CohereChatRequest request) {
+		Assert.isTrue(request.stream(), "The request must be configured to stream the response!");
+		return this.internalInvocationStream(request, CohereChatResponse.Generation.class);
+	}
+
+	/**
+	 * Cohere models version.
+	 */
+	public enum CohereChatModel implements ChatModelDescription {
+
+		/**
+		 * cohere.command-light-text-v14
+		 */
+		COHERE_COMMAND_LIGHT_V14("cohere.command-light-text-v14"),
+
+		/**
+		 * cohere.command-text-v14
+		 */
+		COHERE_COMMAND_V14("cohere.command-text-v14");
+
+		private final String id;
+
+		CohereChatModel(String value) {
+			this.id = value;
+		}
+
+		/**
+		 * @return The model id.
+		 */
+		public String id() {
+			return this.id;
+		}
+
+		@Override
+		public String getName() {
+			return this.id;
+		}
+	}
+
 	/**
 	 * CohereChatRequest encapsulates the request parameters for the Cohere command model.
 	 *
@@ -129,8 +179,8 @@ public class CohereChatBedrockApi extends
 	@JsonInclude(Include.NON_NULL)
 	public record CohereChatRequest(
 			@JsonProperty("prompt") String prompt,
-			@JsonProperty("temperature") Float temperature,
-			@JsonProperty("p") Float topP,
+			@JsonProperty("temperature") Double temperature,
+			@JsonProperty("p") Double topP,
 			@JsonProperty("k") Integer topK,
 			@JsonProperty("max_tokens") Integer maxTokens,
 			@JsonProperty("stop_sequences") List<String> stopSequences,
@@ -141,15 +191,12 @@ public class CohereChatBedrockApi extends
 			@JsonProperty("truncate") Truncate truncate) {
 
 		/**
-		 * Prevents the model from generating unwanted tokens or incentivize the model to include desired tokens.
-		 *
-		 * @param token The token likelihoods.
-		 * @param bias A float between -10 and 10.
+		 * Get CohereChatRequest builder.
+		 * @param prompt compulsory request prompt parameter.
+		 * @return CohereChatRequest builder.
 		 */
-		@JsonInclude(Include.NON_NULL)
-		public record LogitBias(
-				@JsonProperty("token") String token,
-				@JsonProperty("bias") Float bias) {
+		public static Builder builder(String prompt) {
+			return new Builder(prompt);
 		}
 
 		/**
@@ -190,12 +237,15 @@ public class CohereChatBedrockApi extends
 		}
 
 		/**
-		 * Get CohereChatRequest builder.
-		 * @param prompt compulsory request prompt parameter.
-		 * @return CohereChatRequest builder.
+		 * Prevents the model from generating unwanted tokens or incentivize the model to include desired tokens.
+		 *
+		 * @param token The token likelihoods.
+		 * @param bias A float between -10 and 10.
 		 */
-		public static Builder builder(String prompt) {
-			return new Builder(prompt);
+		@JsonInclude(Include.NON_NULL)
+		public record LogitBias(
+				@JsonProperty("token") String token,
+				@JsonProperty("bias") Float bias) {
 		}
 
 		/**
@@ -203,8 +253,8 @@ public class CohereChatBedrockApi extends
 		 */
 		public static class Builder {
 			private final String prompt;
-			private Float temperature;
-			private Float topP;
+			private Double temperature;
+			private Double topP;
 			private Integer topK;
 			private Integer maxTokens;
 			private List<String> stopSequences;
@@ -218,12 +268,12 @@ public class CohereChatBedrockApi extends
 				this.prompt = prompt;
 			}
 
-			public Builder withTemperature(Float temperature) {
+			public Builder withTemperature(Double temperature) {
 				this.temperature = temperature;
 				return this;
 			}
 
-			public Builder withTopP(Float topP) {
+			public Builder withTopP(Double topP) {
 				this.topP = topP;
 				return this;
 			}
@@ -270,17 +320,17 @@ public class CohereChatBedrockApi extends
 
 			public CohereChatRequest build() {
 				return new CohereChatRequest(
-						prompt,
-						temperature,
-						topP,
-						topK,
-						maxTokens,
-						stopSequences,
-						returnLikelihoods,
-						stream,
-						numGenerations,
-						logitBias,
-						truncate
+						this.prompt,
+						this.temperature,
+						this.topP,
+						this.topK,
+						this.maxTokens,
+						this.stopSequences,
+						this.returnLikelihoods,
+						this.stream,
+						this.numGenerations,
+						this.logitBias,
+						this.truncate
 				);
 			}
 		}
@@ -320,6 +370,7 @@ public class CohereChatBedrockApi extends
 		@JsonInclude(Include.NON_NULL)
 		public record Generation(
 				@JsonProperty("id") String id,
+				@JsonProperty("event_type") String event_type,
 				@JsonProperty("likelihood") Float likelihood,
 				@JsonProperty("token_likelihoods") List<TokenLikelihood> tokenLikelihoods,
 				@JsonProperty("finish_reason") FinishReason finishReason,
@@ -327,16 +378,6 @@ public class CohereChatBedrockApi extends
 				@JsonProperty("text") String text,
 				@JsonProperty("index") Integer index,
 				@JsonProperty("amazon-bedrock-invocationMetrics") AmazonBedrockInvocationMetrics amazonBedrockInvocationMetrics) {
-
-			/**
-			 * @param token The token.
-			 * @param likelihood The likelihood of the token.
-			 */
-			@JsonInclude(Include.NON_NULL)
-			public record TokenLikelihood(
-					@JsonProperty("token") String token,
-					@JsonProperty("likelihood") Float likelihood) {
-			}
 
 			/**
 			 * The reason the response finished being generated.
@@ -360,48 +401,17 @@ public class CohereChatBedrockApi extends
 				 */
 				ERROR_TOXIC
 			}
+
+			/**
+			 * @param token The token.
+			 * @param likelihood The likelihood of the token.
+			 */
+			@JsonInclude(Include.NON_NULL)
+			public record TokenLikelihood(
+					@JsonProperty("token") String token,
+					@JsonProperty("likelihood") Float likelihood) {
+			}
 		}
-	}
-
-	/**
-	 * Cohere models version.
-	 */
-	public enum CohereChatModel {
-
-		/**
-		 * cohere.command-light-text-v14
-		 */
-		COHERE_COMMAND_LIGHT_V14("cohere.command-light-text-v14"),
-
-		/**
-		 * cohere.command-text-v14
-		 */
-		COHERE_COMMAND_V14("cohere.command-text-v14");
-
-		private final String id;
-
-		/**
-		 * @return The model id.
-		 */
-		public String id() {
-			return id;
-		}
-
-		CohereChatModel(String value) {
-			this.id = value;
-		}
-	}
-
-	@Override
-	public CohereChatResponse chatCompletion(CohereChatRequest request) {
-		Assert.isTrue(!request.stream(), "The request must be configured to return the complete response!");
-		return this.internalInvocation(request, CohereChatResponse.class);
-	}
-
-	@Override
-	public Flux<CohereChatResponse.Generation> chatCompletionStream(CohereChatRequest request) {
-		Assert.isTrue(request.stream(), "The request must be configured to stream the response!");
-		return this.internalInvocationStream(request, CohereChatResponse.Generation.class);
 	}
 }
 // @formatter:on

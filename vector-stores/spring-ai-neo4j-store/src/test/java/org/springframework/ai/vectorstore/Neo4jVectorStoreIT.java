@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.vectorstore;
 
 import java.util.Collections;
@@ -27,16 +28,15 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.neo4j.driver.AuthTokens;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.GraphDatabase;
-import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser;
 import org.testcontainers.containers.Neo4jContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingClient;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.ai.openai.OpenAiEmbeddingClient;
+import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
@@ -49,17 +49,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Gerrit Meier
  * @author Michael Simons
  * @author Christian Tzolov
+ * @author Thomas Vitale
  */
 @Testcontainers
 @EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
 class Neo4jVectorStoreIT {
 
-	// Needs to be Neo4j 5.15+, because Neo4j 5.15 deprecated the old vector index
-	// creation
-	// function.
 	@Container
-	static Neo4jContainer<?> neo4jContainer = new Neo4jContainer<>(DockerImageName.parse("neo4j:5.18"))
-		.withRandomPassword();
+	static Neo4jContainer<?> neo4jContainer = new Neo4jContainer<>(Neo4jImage.DEFAULT_IMAGE).withRandomPassword();
+
+	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+		.withUserConfiguration(TestApplication.class);
 
 	List<Document> documents = List.of(
 			new Document("Spring AI rocks!! Spring AI rocks!! Spring AI rocks!! Spring AI rocks!! Spring AI rocks!!",
@@ -68,9 +68,6 @@ class Neo4jVectorStoreIT {
 			new Document(
 					"Great Depression Great Depression Great Depression Great Depression Great Depression Great Depression",
 					Collections.singletonMap("meta2", "meta2")));
-
-	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-		.withUserConfiguration(TestApplication.class);
 
 	@BeforeEach
 	void cleanDatabase() {
@@ -260,32 +257,28 @@ class Neo4jVectorStoreIT {
 
 	@Test
 	void ensureVectorIndexGetsCreated() {
-		this.contextRunner.run(context -> {
-			assertThat(context.getBean(Driver.class)
-				.executableQuery(
-						"SHOW indexes yield name, type WHERE name = 'spring-ai-document-index' AND type = 'VECTOR' return count(*) > 0")
-				.execute()
-				.records()
-				.get(0) // get first record
-				.get(0)
-				.asBoolean()) // get returned result
-				.isTrue();
-		});
+		this.contextRunner.run(context -> assertThat(context.getBean(Driver.class)
+			.executableQuery(
+					"SHOW indexes yield name, type WHERE name = 'spring-ai-document-index' AND type = 'VECTOR' return count(*) > 0")
+			.execute()
+			.records()
+			.get(0) // get first record
+			.get(0)
+			.asBoolean()) // get returned result
+			.isTrue());
 	}
 
 	@Test
 	void ensureIdIndexGetsCreated() {
-		this.contextRunner.run(context -> {
-			assertThat(context.getBean(Driver.class)
-				.executableQuery(
-						"SHOW indexes yield labelsOrTypes, properties, type WHERE any(x in labelsOrTypes where x = 'Document')  AND any(x in properties where x = 'id') AND type = 'RANGE' return count(*) > 0")
-				.execute()
-				.records()
-				.get(0) // get first record
-				.get(0)
-				.asBoolean()) // get returned result
-				.isTrue();
-		});
+		this.contextRunner.run(context -> assertThat(context.getBean(Driver.class)
+			.executableQuery(
+					"SHOW indexes yield labelsOrTypes, properties, type WHERE any(x in labelsOrTypes where x = 'Document')  AND any(x in properties where x = 'id') AND type = 'RANGE' return count(*) > 0")
+			.execute()
+			.records()
+			.get(0) // get first record
+			.get(0)
+			.asBoolean()) // get returned result
+			.isTrue());
 	}
 
 	@SpringBootConfiguration
@@ -293,10 +286,10 @@ class Neo4jVectorStoreIT {
 	public static class TestApplication {
 
 		@Bean
-		public VectorStore vectorStore(Driver driver, EmbeddingClient embeddingClient) {
+		public VectorStore vectorStore(Driver driver, EmbeddingModel embeddingModel) {
 
-			return new Neo4jVectorStore(driver, embeddingClient,
-					Neo4jVectorStore.Neo4jVectorStoreConfig.defaultConfig());
+			return new Neo4jVectorStore(driver, embeddingModel, Neo4jVectorStore.Neo4jVectorStoreConfig.defaultConfig(),
+					true);
 		}
 
 		@Bean
@@ -306,8 +299,8 @@ class Neo4jVectorStoreIT {
 		}
 
 		@Bean
-		public EmbeddingClient embeddingClient() {
-			return new OpenAiEmbeddingClient(new OpenAiApi(System.getenv("OPENAI_API_KEY")));
+		public EmbeddingModel embeddingModel() {
+			return new OpenAiEmbeddingModel(new OpenAiApi(System.getenv("OPENAI_API_KEY")));
 		}
 
 	}

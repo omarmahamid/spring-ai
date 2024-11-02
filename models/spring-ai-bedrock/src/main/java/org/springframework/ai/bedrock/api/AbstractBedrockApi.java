@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,8 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// @formatter:off
+
 package org.springframework.ai.bedrock.api;
+
+// @formatter:off
 
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -103,7 +105,7 @@ public abstract class AbstractBedrockApi<I, O, SO> {
 	 * @param objectMapper The object mapper to use for JSON serialization and deserialization.
 	 */
 	public AbstractBedrockApi(String modelId, AwsCredentialsProvider credentialsProvider, String region,
-			 ObjectMapper objectMapper) {
+			ObjectMapper objectMapper) {
 		this(modelId, credentialsProvider, region, objectMapper, Duration.ofMinutes(5));
 	}
 
@@ -176,24 +178,6 @@ public abstract class AbstractBedrockApi<I, O, SO> {
 	}
 
 	/**
-	 * Encapsulates the metrics about the model invocation.
-	 * https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-claude.html
-	 *
-	 * @param inputTokenCount The number of tokens in the input prompt.
-	 * @param firstByteLatency The time in milliseconds between the request being sent and the first byte of the
-	 * response being received.
-	 * @param outputTokenCount The number of tokens in the generated text.
-	 * @param invocationLatency The time in milliseconds between the request being sent and the response being received.
-	 */
-	@JsonInclude(Include.NON_NULL)
-	public record AmazonBedrockInvocationMetrics(
-			@JsonProperty("inputTokenCount") Long inputTokenCount,
-			@JsonProperty("firstByteLatency") Long firstByteLatency,
-			@JsonProperty("outputTokenCount") Long outputTokenCount,
-			@JsonProperty("invocationLatency") Long invocationLatency) {
-	}
-
-	/**
 	 * Compute the embedding for the given text.
 	 *
 	 * @param request The embedding request.
@@ -239,7 +223,7 @@ public abstract class AbstractBedrockApi<I, O, SO> {
 
 		SdkBytes body;
 		try {
-			body = SdkBytes.fromUtf8String(new ObjectMapper().writeValueAsString(request));
+			body = SdkBytes.fromUtf8String(this.objectMapper.writeValueAsString(request));
 		}
 		catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("Invalid JSON format for the input request: " + request, e);
@@ -291,7 +275,7 @@ public abstract class AbstractBedrockApi<I, O, SO> {
 
 		InvokeModelWithResponseStreamResponseHandler.Visitor visitor = InvokeModelWithResponseStreamResponseHandler.Visitor
 				.builder()
-				.onChunk((chunk) -> {
+				.onChunk(chunk -> {
 					try {
 						logger.debug("Received chunk: " + chunk.bytes().asString(StandardCharsets.UTF_8));
 						SO response = this.objectMapper.readValue(chunk.bytes().asByteArray(), clazz);
@@ -302,7 +286,7 @@ public abstract class AbstractBedrockApi<I, O, SO> {
 						eventSink.tryEmitError(e);
 					}
 				})
-				.onDefault((event) -> {
+				.onDefault(event -> {
 					logger.error("Unknown or unhandled event: " + event.toString());
 					eventSink.tryEmitError(new Throwable("Unknown or unhandled event: " + event.toString()));
 				})
@@ -313,29 +297,43 @@ public abstract class AbstractBedrockApi<I, O, SO> {
 				.onComplete(
 						() -> {
 							EmitResult emitResult = eventSink.tryEmitComplete();
-							while(!emitResult.isSuccess()){
+							while (!emitResult.isSuccess()) {
 								System.out.println("Emitting complete:" + emitResult);
 								emitResult = eventSink.tryEmitComplete();
-							};
+							}
 							eventSink.emitComplete(EmitFailureHandler.busyLooping(Duration.ofSeconds(3)));
 							// EmitResult emitResult = eventSink.tryEmitComplete();
 							logger.debug("\nCompleted streaming response.");
 						})
-				.onError((error) -> {
+				.onError(error -> {
 					logger.error("\n\nError streaming response: " + error.getMessage());
 					eventSink.tryEmitError(error);
 				})
-				.onEventStream((stream) -> {
-					stream.subscribe(
-							(ResponseStream e) -> {
-								e.accept(visitor);
-							});
-				})
+				.onEventStream(stream -> stream.subscribe(
+						(ResponseStream e) -> e.accept(visitor)))
 				.build();
 
 		this.clientStreaming.invokeModelWithResponseStream(invokeRequest, responseHandler);
 
 		return eventSink.asFlux();
+	}
+
+	/**
+	 * Encapsulates the metrics about the model invocation.
+	 * https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-claude.html
+	 *
+	 * @param inputTokenCount The number of tokens in the input prompt.
+	 * @param firstByteLatency The time in milliseconds between the request being sent and the first byte of the
+	 * response being received.
+	 * @param outputTokenCount The number of tokens in the generated text.
+	 * @param invocationLatency The time in milliseconds between the request being sent and the response being received.
+	 */
+	@JsonInclude(Include.NON_NULL)
+	public record AmazonBedrockInvocationMetrics(
+			@JsonProperty("inputTokenCount") Long inputTokenCount,
+			@JsonProperty("firstByteLatency") Long firstByteLatency,
+			@JsonProperty("outputTokenCount") Long outputTokenCount,
+			@JsonProperty("invocationLatency") Long invocationLatency) {
 	}
 }
 // @formatter:on

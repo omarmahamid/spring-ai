@@ -1,11 +1,11 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.openai;
 
 import java.util.List;
@@ -34,8 +35,8 @@ public class ChatCompletionRequestTests {
 	@Test
 	public void createRequestWithChatOptions() {
 
-		var client = new OpenAiChatClient(new OpenAiApi("TEST"),
-				OpenAiChatOptions.builder().withModel("DEFAULT_MODEL").withTemperature(66.6f).build());
+		var client = new OpenAiChatModel(new OpenAiApi("TEST"),
+				OpenAiChatOptions.builder().withModel("DEFAULT_MODEL").withTemperature(66.6).build());
 
 		var request = client.createRequest(new Prompt("Test message content"), false);
 
@@ -43,16 +44,16 @@ public class ChatCompletionRequestTests {
 		assertThat(request.stream()).isFalse();
 
 		assertThat(request.model()).isEqualTo("DEFAULT_MODEL");
-		assertThat(request.temperature()).isEqualTo(66.6f);
+		assertThat(request.temperature()).isEqualTo(66.6);
 
 		request = client.createRequest(new Prompt("Test message content",
-				OpenAiChatOptions.builder().withModel("PROMPT_MODEL").withTemperature(99.9f).build()), true);
+				OpenAiChatOptions.builder().withModel("PROMPT_MODEL").withTemperature(99.9).build()), true);
 
 		assertThat(request.messages()).hasSize(1);
 		assertThat(request.stream()).isTrue();
 
 		assertThat(request.model()).isEqualTo("PROMPT_MODEL");
-		assertThat(request.temperature()).isEqualTo(99.9f);
+		assertThat(request.temperature()).isEqualTo(99.9);
 	}
 
 	@Test
@@ -60,7 +61,7 @@ public class ChatCompletionRequestTests {
 
 		final String TOOL_FUNCTION_NAME = "CurrentWeather";
 
-		var client = new OpenAiChatClient(new OpenAiApi("TEST"),
+		var client = new OpenAiChatModel(new OpenAiApi("TEST"),
 				OpenAiChatOptions.builder().withModel("DEFAULT_MODEL").build());
 
 		var request = client.createRequest(new Prompt("Test message content",
@@ -69,7 +70,7 @@ public class ChatCompletionRequestTests {
 					.withFunctionCallbacks(List.of(FunctionCallbackWrapper.builder(new MockWeatherService())
 						.withName(TOOL_FUNCTION_NAME)
 						.withDescription("Get the weather in location")
-						.withResponseConverter((response) -> "" + response.temp() + response.unit())
+						.withResponseConverter(response -> "" + response.temp() + response.unit())
 						.build()))
 					.build()),
 				false);
@@ -90,13 +91,13 @@ public class ChatCompletionRequestTests {
 
 		final String TOOL_FUNCTION_NAME = "CurrentWeather";
 
-		var client = new OpenAiChatClient(new OpenAiApi("TEST"),
+		var client = new OpenAiChatModel(new OpenAiApi("TEST"),
 				OpenAiChatOptions.builder()
 					.withModel("DEFAULT_MODEL")
 					.withFunctionCallbacks(List.of(FunctionCallbackWrapper.builder(new MockWeatherService())
 						.withName(TOOL_FUNCTION_NAME)
 						.withDescription("Get the weather in location")
-						.withResponseConverter((response) -> "" + response.temp() + response.unit())
+						.withResponseConverter(response -> "" + response.temp() + response.unit())
 						.build()))
 					.build());
 
